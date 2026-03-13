@@ -1,11 +1,13 @@
 import hashlib
 import uuid
 from datetime import datetime
-from decimal import Decimal
-from re import L
 from typing import Optional, cast
 
-from app.schemas import tbo
+from app.clients.exceptions import ExternalProviderError
+from app.schemas.internal.booking import (
+    BookingConfirmRequest,
+    BookingConfirmResponse,
+)
 from app.schemas.internal.fare_quote import FareQuoteResponse
 from app.schemas.internal.fare_rule import FareRule, FareRulesResponse
 from app.schemas.internal.flight import (
@@ -34,13 +36,19 @@ from app.schemas.internal.ssr import (
     SeatStatus,
     SeatType,
 )
-from app.schemas.tbo.book import TBOBookRequest
+from app.schemas.tbo.book import (
+    BaggageSelection,
+    BookPassenger,
+    MealSelection,
+    PassengerFare,
+    SeatDynamicSelection,
+    TBOBookRequest,
+)
 from app.schemas.tbo.common import (
     Baggage,
     Meal,
     Seat,
     SeatDynamic,
-    SegmentSeatModel,
     SimpleMeal,
 )
 from app.schemas.tbo.enums import BaggageDescriptionEnum, FlightCabinClass, JourneyType
@@ -55,6 +63,12 @@ from app.schemas.tbo.search import (
     TBOSearchResponse,
 )
 from app.schemas.tbo.ssr import TBOSSRResponse
+from app.schemas.tbo.ticket import (
+    PassengerFareSmall,
+    TBOTicketLCCRequest,
+    TBOTicketResponse,
+    TicketPassengerRequest,
+)
 from app.utils.cache import FlightCache
 
 # MAPPINGS
@@ -63,8 +77,8 @@ CABIN_CLASS_MAP: dict[int, CabinClass] = {
     FlightCabinClass.PREMIUM_ECONOMY: "premium_economy",
     FlightCabinClass.BUSINESS: "business",
     FlightCabinClass.FIRST: "first",
-    FlightCabinClass.ALL: "economy",  # default to economy
-    FlightCabinClass.UNKNOWN: "economy",  # default to economy
+    FlightCabinClass.ALL: "economy",
+    FlightCabinClass.UNKNOWN: "economy",
 }
 
 PASSENGER_TYPE_MAP: dict[int, PassengerType] = {
@@ -81,70 +95,63 @@ SEAT_STATUS_MAP: dict[int, SeatStatus] = {
 }
 
 SEAT_TYPE_MAP: dict[int, str] = {
-    # Window types
-    1: "window",  # Window
-    4: "window",  # WindowRecline
-    5: "window",  # WindowWing
-    6: "window",  # WindowExitRow
-    7: "window",  # WindowReclineWing
-    8: "window",  # WindowReclineExitRow
-    9: "window",  # WindowWingExitRow
-    22: "window",  # WindowReclineWingExitRow
-    25: "window",  # WindowBulkhead
-    26: "window",  # WindowQuiet
-    27: "window",  # WindowBulkheadQuiet
-    42: "window",  # WindowBulkheadWing
-    43: "window",  # WindowBulkheadExitRow
-    # Aisle types
-    2: "aisle",  # Aisle
-    10: "aisle",  # AisleRecline
-    11: "aisle",  # AisleWing
-    12: "aisle",  # AisleExitRow
-    13: "aisle",  # AisleReclineWing
-    14: "aisle",  # AisleReclineExitRow
-    15: "aisle",  # AisleWingExitRow
-    23: "aisle",  # AisleReclineWingExitRow
-    31: "aisle",  # AisleBulkhead
-    32: "aisle",  # AisleQuiet
-    33: "aisle",  # AisleBulkheadQuiet
-    46: "aisle",  # AisleBulkheadWing
-    47: "aisle",  # AisleBulkheadExitRow
-    # Middle types
-    3: "middle",  # Middle
-    16: "middle",  # MiddleRecline
-    17: "middle",  # MiddleWing
-    18: "middle",  # MiddleExitRow
-    19: "middle",  # MiddleReclineWing
-    20: "middle",  # MiddleReclineExitRow
-    21: "middle",  # MiddleWingExitRow
-    24: "middle",  # MiddleReclineWingExitRow
-    28: "middle",  # MiddleBulkhead
-    29: "middle",  # MiddleQuiet
-    30: "middle",  # MiddleBulkheadQuiet
-    44: "middle",  # MiddleBulkheadWing
-    45: "middle",  # MiddleBulkheadExitRow
-    # Centre types (map to middle)
-    34: "middle",  # CentreAisle
-    35: "middle",  # CentreMiddle
-    36: "middle",  # CentreAisleBulkhead
-    37: "middle",  # CentreAisleQuiet
-    38: "middle",  # CentreAisleBulkheadQuiet
-    39: "middle",  # CentreMiddleBulkhead
-    40: "middle",  # CentreMiddleQuiet
-    41: "middle",  # CentreMiddleBulkheadQuiet
-    # NotSet and any unknowns
-    0: "middle",  # NotSet
+    1: "window",
+    4: "window",
+    5: "window",
+    6: "window",
+    7: "window",
+    8: "window",
+    9: "window",
+    22: "window",
+    25: "window",
+    26: "window",
+    27: "window",
+    42: "window",
+    43: "window",
+    2: "aisle",
+    10: "aisle",
+    11: "aisle",
+    12: "aisle",
+    13: "aisle",
+    14: "aisle",
+    15: "aisle",
+    23: "aisle",
+    31: "aisle",
+    32: "aisle",
+    33: "aisle",
+    46: "aisle",
+    47: "aisle",
+    3: "middle",
+    16: "middle",
+    17: "middle",
+    18: "middle",
+    19: "middle",
+    20: "middle",
+    21: "middle",
+    24: "middle",
+    28: "middle",
+    29: "middle",
+    30: "middle",
+    44: "middle",
+    45: "middle",
+    34: "middle",
+    35: "middle",
+    36: "middle",
+    37: "middle",
+    38: "middle",
+    39: "middle",
+    40: "middle",
+    41: "middle",
+    0: "middle",
 }
 
 
 class TBOTransformer:
-    """
-    Transform TBO API responses to internal schemas.
+    """Transform TBO API responses to internal schemas."""
 
-    Usage:
-        transformer = TBOTransformer()
-        response = await transformer.transform_search_response(tbo_response, request)
-    """
+    # ------------------------------------------------------------------
+    # SSR TRANSFORMERS
+    # ------------------------------------------------------------------
 
     def transform_non_lcc_ssr_response(
         self,
@@ -159,18 +166,14 @@ class TBOTransformer:
             for segment in seat_options.SegmentSeat:
                 if not segment.RowSeats:
                     continue
-
-                # use sample seat to identify which segment this map belongs to
                 sample_seat = segment.RowSeats[0].Seats[0]
                 key = f"{sample_seat.FlightNumber}_{sample_seat.Origin}"
-
                 if key not in segment_map:
                     segment_map[key] = NonLccSegmentSsrView(
                         flight_number=sample_seat.FlightNumber,
                         origin=sample_seat.Origin,
                         destination=sample_seat.Destination,
                     )
-
                 segment_map[key].seat_options = [
                     SeatRow(
                         row_number=rows.Seats[0].RowNo,
@@ -198,16 +201,13 @@ class TBOTransformer:
                 segment_map[key] = NonLccSegmentSsrView(
                     flight_number=b.FlightNumber,
                     origin=b.Origin,
-                    destination=b.Destination,  # ERROR: baggage may have destination as final destination ratehr then the segment destination. => first assign seats
+                    destination=b.Destination,
                 )
-
             segment_map[key].baggage_options.append(
                 BaggageOptions(
                     code=b.Code,
-                    # description=b.Description.name,
                     weight=b.Weight,
                     price=b.Price,
-                    # is_included=b.Description == 1,
                     for_full_journey=b.WayType == 2,
                 )
             )
@@ -229,7 +229,6 @@ class TBOTransformer:
         meal_options: list[Meal] | None,
         seat_options: Optional[SeatDynamic],
     ) -> LccSsrView:
-        """Transform TBOSSRResponse of a single leg to internal SsrResponse."""
         segment_map: dict[str, LccSegmentSsrView] = {}
 
         # SEAT
@@ -237,18 +236,14 @@ class TBOTransformer:
             for segment in seat_options.SegmentSeat:
                 if not segment.RowSeats:
                     continue
-
-                # use sample seat to identify which segment this map belongs to
                 sample_seat = segment.RowSeats[0].Seats[0]
                 key = f"{sample_seat.FlightNumber}_{sample_seat.Origin}"
-
                 if key not in segment_map:
                     segment_map[key] = LccSegmentSsrView(
                         flight_number=sample_seat.FlightNumber,
                         origin=sample_seat.Origin,
                         destination=sample_seat.Destination,
                     )
-
                 segment_map[key].seat_options = [
                     SeatRow(
                         row_number=rows.Seats[0].RowNo,
@@ -276,22 +271,21 @@ class TBOTransformer:
                 segment_map[key] = LccSegmentSsrView(
                     flight_number=b.FlightNumber,
                     origin=b.Origin,
-                    destination=b.Destination,  # ERROR: baggage may have destination as final destination ratehr then the segment destination. => first assign seats
+                    destination=b.Destination,
                 )
-
             segment_map[key].baggage_options.append(
                 BaggageOptions(
                     code=b.Code,
-                    # description=b.Description.name,
                     weight=b.Weight,
                     price=b.Price,
-                    # is_included=b.Description == 1,
                     for_full_journey=b.WayType == 2,
                 )
             )
 
         # MEAL
         for m in meal_options or []:
+            if m.Code == "NoMeal":
+                continue
             key = f"{m.FlightNumber}_{m.Origin}"
             if key not in segment_map:
                 segment_map[key] = LccSegmentSsrView(
@@ -299,48 +293,24 @@ class TBOTransformer:
                     origin=m.Origin,
                     destination=m.Destination,
                 )
-
             segment_map[key].meal_options.append(
                 LccMealOptions(
                     code=m.Code,
-                    description=m.AirlineDescription,
+                    description=m.AirlineDescription or "",
                     price=m.Price,
-                    # is_included=m.Description == 1,
-                    for_full_journey=b.WayType == 2,
+                    for_full_journey=m.WayType == 2,
                 )
             )
 
         return LccSsrView(segments=list(segment_map.values()))
 
-    # def transform_fare_quote_response(
-    #     self,
-    #     tbo_response: TBOFareQuoteResponse,
-    #     trace_id: str,
-    #     cache: FlightCache,
-    #     price_increase: float,
-    # ) -> FareQuoteResponse:
-    #     """Transform TBOFareQuoteResponse to internal FareQuoteResponse."""
-    #     new_fare_option = self._build_fare_options(
-    #         itinerary=tbo_response.Response.Results,
-    #         trace_id=trace_id,
-    #         cache=cache,
-    #     )
-    #     return FareQuoteResponse(
-    #         is_price_changed=True,
-    #         price_increase=price_increase,
-    #         new_fare_option=new_fare_option,
-    #     )
-
     def transform_fare_rule_response(
         self, tbo_response: TBOFareRuleResponse
     ) -> FareRulesResponse:
-        """Transform TBOFareRuleResponse to internal FareRulesResponse."""
         tbo_fare_rules = tbo_response.Response.FareRules or []
-
         internal_fare_rules = [
             FareRule(
                 airline=rule.Airline,
-                # departure_time=rule.DepartureTime,
                 destination=rule.Destination,
                 fare_basis_code=rule.FareBasisCode,
                 fare_inclusions=rule.FareInclusions,
@@ -348,19 +318,382 @@ class TBOTransformer:
                 fare_rule_detail=rule.FareRuleDetail,
                 flight_id=rule.FlightId,
                 origin=rule.Origin,
-                # return_date=rule.ReturnDate,
             )
             for rule in tbo_fare_rules
         ]
-
         return FareRulesResponse(fare_rules=internal_fare_rules)
+
+    # ------------------------------------------------------------------
+    # FREE SSR AUTO-SELECTION (Step 7)
+    # ------------------------------------------------------------------
+
+    def _find_free_ssr(self, raw_ssr: Optional[TBOSSRResponse]) -> dict:
+        """Find free (Price=0) SSR items from cached SSR response.
+
+        TBO may have free meals/baggage that MUST be selected for the booking
+        to succeed. If user doesn't pick anything, we auto-select these.
+        """
+        result = {
+            "free_baggage": None,
+            "free_meal_lcc": None,
+            "free_meal_code": None,
+        }
+        if not raw_ssr or not raw_ssr.Response:
+            return result
+
+        # Free baggage: Description=1 (Included) + Price=0
+        if raw_ssr.Response.Baggage:
+            for seg_options in raw_ssr.Response.Baggage:
+                for b in seg_options or []:
+                    if b.Price == 0 and b.Description == 1:
+                        result["free_baggage"] = b
+                        break
+                if result["free_baggage"]:
+                    break
+
+        # Free LCC meal (MealDynamic): Price=0
+        if raw_ssr.Response.MealDynamic:
+            for seg_options in raw_ssr.Response.MealDynamic:
+                for m in seg_options or []:
+                    if m.Price == 0 and m.Code != "NoMeal":
+                        result["free_meal_lcc"] = m
+                        break
+                if result["free_meal_lcc"]:
+                    break
+
+        # Non-LCC meal (Meal): these are just dietary preference codes, typically free
+        if raw_ssr.Response.Meal:
+            for m in raw_ssr.Response.Meal:
+                if m.Code:
+                    result["free_meal_code"] = m.Code
+                    break
+
+        return result
+
+    # ------------------------------------------------------------------
+    # BOOKING TRANSFORMERS
+    # ------------------------------------------------------------------
+
+    def transform_book_request(
+        self,
+        request: BookingConfirmRequest,
+        cached_data: dict,
+        end_user_ip: str,
+        raw_ssr: Optional[TBOSSRResponse] = None,
+    ) -> TBOBookRequest:
+        """Build TBO Book request for Non-LCC flights."""
+        free_ssr = self._find_free_ssr(raw_ssr)
+
+        passengers = []
+        for p in request.passengers:
+            dob = datetime.strptime(p.date_of_birth, "%Y-%m-%d")
+            passport_expiry = (
+                datetime.strptime(p.passport_expiry, "%Y-%m-%d")
+                if p.passport_expiry
+                else None
+            )
+            passport_issue_date = (
+                datetime.strptime(p.passport_issue_date, "%Y-%m-%d")
+                if p.passport_issue_date
+                else None
+            )
+
+            fare = PassengerFare(
+                Currency=p.fare.currency,
+                BaseFare=p.fare.base_fare,
+                Tax=p.fare.tax,
+                YQTax=p.fare.yq_tax or 0,
+                AdditionalTxnFeeOfrd=p.fare.additional_txn_fee_ofrd or 0,
+                AdditionalTxnFeePub=p.fare.additional_txn_fee_pub or 0,
+                PGCharge=p.fare.pg_charge or 0,
+                OtherCharges=p.fare.other_charges,
+            )
+
+            meal = None
+            seat_pref = None
+            baggage = None
+            if p.ssr:
+                if p.ssr.meal_code:
+                    meal = MealSelection(Code=p.ssr.meal_code, Description=2)
+                if p.ssr.seat_code:
+                    seat_pref = SeatDynamicSelection(
+                        Code=p.ssr.seat_code, Description=2
+                    )
+                if p.ssr.baggage_code:
+                    baggage = BaggageSelection(Code=p.ssr.baggage_code, Description=2)
+
+            # Auto-assign free SSR if user didn't select
+            if not meal and free_ssr["free_meal_code"]:
+                meal = MealSelection(Code=free_ssr["free_meal_code"], Description=1)
+            if p.pax_type != 3:  # not infant
+                if not baggage and free_ssr["free_baggage"]:
+                    baggage = BaggageSelection(
+                        Code=free_ssr["free_baggage"].Code,
+                        Description=1,
+                    )
+
+            passengers.append(
+                BookPassenger(
+                    Title=p.title,
+                    FirstName=p.first_name,
+                    LastName=p.last_name,
+                    PaxType=p.pax_type,
+                    DateOfBirth=dob,
+                    Gender=p.gender,
+                    AddressLine1=p.address_line1
+                    if p.address_line1 and p.address_line1.strip() not in ("", "N/A")
+                    else "123, Test",
+                    AddressLine2=p.address_line2,
+                    City=p.city
+                    if p.city and p.city.strip() not in ("", "N/A")
+                    else "New Delhi",
+                    CountryCode=p.country_code,
+                    CountryName=p.country_name,
+                    Nationality=p.nationality,
+                    ContactNo=p.contact_no,
+                    Email=p.email,
+                    IsLeadPax=p.is_lead_pax,
+                    PassportNo=p.passport_no,
+                    PassportExpiry=passport_expiry,
+                    PassportIssueDate=passport_issue_date,
+                    PassportIssueCountryCode=p.passport_issue_country_code,
+                    PAN=p.pan,
+                    GSTCompanyName=p.gst.gst_company_name if p.gst else None,
+                    GSTNumber=p.gst.gst_number if p.gst else None,
+                    GSTCompanyAddress=p.gst.gst_company_address if p.gst else None,
+                    GSTCompanyContactNumber=p.gst.gst_company_contact_number
+                    if p.gst
+                    else None,
+                    GSTCompanyEmail=p.gst.gst_company_email if p.gst else None,
+                    Fare=fare,
+                    MealDynamic=meal,
+                    SeatDynamic=seat_pref,
+                    Baggage=baggage,
+                )
+            )
+
+        return TBOBookRequest(
+            EndUserIp=end_user_ip,
+            TokenId="",
+            TraceId=cached_data["TraceId"],
+            ResultIndex=cached_data["ResultIndex"],
+            Passengers=passengers,
+        )
+
+    def transform_ticket_lcc_request(
+        self,
+        request: BookingConfirmRequest,
+        cached_data: dict,
+        end_user_ip: str,
+        raw_ssr: Optional[TBOSSRResponse] = None,
+        force_no_seat_selection: bool = False,
+    ) -> TBOTicketLCCRequest:
+        """Build TBO Ticket request for LCC flights."""
+        free_ssr = self._find_free_ssr(raw_ssr)
+
+        # Build lookup maps from cached SSR
+        baggage_map: dict[str, Baggage] = {}
+        meal_map: dict[str, Meal] = {}
+        seat_map: dict[str, Seat] = {}
+        free_meals_by_segment: list[Meal] = []
+        no_seat_list: list[Seat] = []
+
+        if raw_ssr and raw_ssr.Response:
+            if raw_ssr.Response.Baggage:
+                for seg_options in raw_ssr.Response.Baggage:
+                    for b in seg_options or []:
+                        baggage_map[b.Code] = b
+
+            if raw_ssr.Response.SeatDynamic:
+                for sd in raw_ssr.Response.SeatDynamic:
+                    if sd.SegmentSeat:
+                        for seg in sd.SegmentSeat:
+                            reference_seat: Seat | None = None
+                            if seg.RowSeats:
+                                for row in seg.RowSeats:
+                                    for seat in row.Seats:
+                                        if reference_seat is None:
+                                            reference_seat = seat
+                                        if seat.Code and seat.Code != "NoSeat":
+                                            seat_map[seat.Code] = seat
+                            if reference_seat:
+                                no_seat_list.append(
+                                    Seat(
+                                        AirlineCode=reference_seat.AirlineCode,
+                                        FlightNumber=reference_seat.FlightNumber,
+                                        CraftType=reference_seat.CraftType,
+                                        Origin=reference_seat.Origin,
+                                        Destination=reference_seat.Destination,
+                                        AvailablityType=0,
+                                        Description=2,
+                                        Code="NoSeat",
+                                        RowNo="0",
+                                        SeatNo=None,
+                                        SeatType=0,
+                                        SeatWayType=2,
+                                        Compartment=0,
+                                        Deck=0,
+                                        Currency=reference_seat.Currency,
+                                        Price=0.0,
+                                    )
+                                )
+
+            if raw_ssr.Response.MealDynamic:
+                for seg_options in raw_ssr.Response.MealDynamic:
+                    for m in seg_options or []:
+                        if m.Code == "NoMeal":
+                            continue
+                        meal_map[m.Code] = m
+                    free_meal = next(
+                        (meal for meal in (seg_options or []) if meal.Price == 0 and meal.Code != "NoMeal"),
+                        None,
+                    )
+                    if free_meal:
+                        free_meals_by_segment.append(free_meal)
+
+        passengers = []
+        for p in request.passengers:
+            passport_expiry = (
+                datetime.strptime(p.passport_expiry, "%Y-%m-%d")
+                if p.passport_expiry
+                else None
+            )
+            passport_issue_date = (
+                datetime.strptime(p.passport_issue_date, "%Y-%m-%d")
+                if p.passport_issue_date
+                else None
+            )
+
+            fare = PassengerFareSmall(
+                BaseFare=p.fare.base_fare,
+                Tax=p.fare.tax,
+                YQTax=p.fare.yq_tax or 0,
+                AdditionalTxnFeeOfrd=p.fare.additional_txn_fee_ofrd or 0,
+                AdditionalTxnFeePub=p.fare.additional_txn_fee_pub or 0,
+                PGCharge=p.fare.pg_charge or 0,
+            )
+
+            baggage_list: list[Baggage] | None = None
+            meal_list: list[Meal] | None = None
+
+            if p.ssr:
+                if p.ssr.baggage_code and p.ssr.baggage_code in baggage_map:
+                    baggage_list = [baggage_map[p.ssr.baggage_code]]
+                if p.ssr.meal_code and p.ssr.meal_code in meal_map:
+                    meal_list = [meal_map[p.ssr.meal_code]]
+
+            # Auto-assign free SSR if user didn't select
+            if not meal_list and free_meals_by_segment:
+                meal_list = list(free_meals_by_segment)
+            elif not meal_list and free_ssr["free_meal_lcc"]:
+                meal_list = [free_ssr["free_meal_lcc"]]
+            if p.pax_type != 3:  # not infant
+                if not baggage_list and free_ssr["free_baggage"]:
+                    baggage_list = [free_ssr["free_baggage"]]
+
+            seat_dynamic: list[Seat] | None = None
+            if p.pax_type != 3:
+                if (
+                    not force_no_seat_selection
+                    and p.ssr
+                    and p.ssr.seat_code
+                    and p.ssr.seat_code in seat_map
+                ):
+                    seat_dynamic = [seat_map[p.ssr.seat_code]]
+                elif no_seat_list:
+                    seat_dynamic = list(no_seat_list)
+
+            dob = (
+                p.date_of_birth
+                if "T" in p.date_of_birth
+                else p.date_of_birth + "T00:00:00"
+            )
+
+            passengers.append(
+                TicketPassengerRequest(
+                    Title=p.title,
+                    FirstName=p.first_name,
+                    LastName=p.last_name,
+                    PaxType=p.pax_type,
+                    Gender=p.gender,
+                    DateOfBirth=dob,
+                    AddressLine1=p.address_line1
+                    if p.address_line1 and p.address_line1.strip() not in ("", "N/A")
+                    else "123, Test",
+                    AddressLine2=p.address_line2,
+                    City=p.city
+                    if p.city and p.city.strip() not in ("", "N/A")
+                    else "New Delhi",
+                    CountryCode=p.country_code,
+                    CountryName=p.country_name or "India",
+                    ContactNo=p.contact_no,
+                    Email=p.email,
+                    IsLeadPax=p.is_lead_pax,
+                    Nationality=p.nationality,
+                    IsPassportRequired=p.is_passport_required,
+                    PassportNo=p.passport_no,
+                    PassportExpiry=passport_expiry,
+                    PassportIssueDate=passport_issue_date,
+                    PassportIssueCountryCode=p.passport_issue_country_code,
+                    PAN=p.pan,
+                    GSTCompanyName=p.gst.gst_company_name if p.gst else None,
+                    GSTNumber=p.gst.gst_number if p.gst else None,
+                    GSTCompanyAddress=p.gst.gst_company_address if p.gst else None,
+                    GSTCompanyContactNumber=p.gst.gst_company_contact_number
+                    if p.gst
+                    else None,
+                    GSTCompanyEmail=p.gst.gst_company_email if p.gst else None,
+                    Fare=fare,
+                    Baggage=baggage_list,
+                    MealDynamic=meal_list,
+                    SeatDynamic=seat_dynamic,
+                )
+            )
+
+        return TBOTicketLCCRequest(
+            EndUserIp=end_user_ip,
+            TokenId="",
+            TraceId=cached_data["TraceId"],
+            ResultIndex=cached_data["ResultIndex"],
+            Passengers=passengers,
+        )
+
+    def transform_booking_confirm_response(
+        self,
+        ticket_response: TBOTicketResponse,
+        is_lcc: bool,
+    ) -> BookingConfirmResponse:
+        inner = ticket_response.Response.Response
+        if inner is None:
+            error = ticket_response.Response.Error
+            raise ExternalProviderError(
+                provider_code="TICKET_FAILED",
+                http_status=502,
+                message=f"TBO ticketing failed: {error.ErrorMessage if error else 'Unknown error'}",
+            )
+        itinerary = inner.FlightItinerary
+
+        return BookingConfirmResponse(
+            pnr=inner.PNR,
+            booking_id=inner.BookingId,
+            is_lcc=is_lcc,
+            ticket_status=inner.TicketStatus,
+            ssr_denied=inner.SSRDenied,
+            ssr_message=inner.SSRMessage,
+            invoice_no=itinerary.InvoiceNo,
+            invoice_amount=itinerary.InvoiceAmount,
+            is_price_changed=inner.IsPriceChanged,
+            is_time_changed=inner.IsTimeChanged,
+        )
+
+    # ------------------------------------------------------------------
+    # SEARCH TRANSFORMERS
+    # ------------------------------------------------------------------
 
     async def trasform_search_request(
         self, request: FlightSearchRequest
     ) -> TBOSearchRequest:
-        """Transform internal FlightSearchRequest to TBOSearchRequest."""
         segments = []
-        # Outbound segment
         segments.append(
             SearchSegment(
                 Origin=request.origin,
@@ -372,7 +705,6 @@ class TBOTransformer:
                 PreferredArrivalTime=None,
             )
         )
-        # Return segment (for roundtrip)
         if request.trip_type == "roundtrip" and request.return_date:
             segments.append(
                 SearchSegment(
@@ -385,9 +717,9 @@ class TBOTransformer:
                     PreferredArrivalTime=None,
                 )
             )
-        tbo_request = TBOSearchRequest(
-            EndUserIp="0.0.0.0",  # placeholder, should be set properly
-            TokenId="",  # client will set
+        return TBOSearchRequest(
+            EndUserIp="0.0.0.0",
+            TokenId="",
             AdultCount=request.adults,
             ChildCount=request.children,
             InfantCount=request.infants,
@@ -402,7 +734,6 @@ class TBOTransformer:
             Segments=segments,
             Sources=None,
         )
-        return tbo_request
 
     async def transform_search_response(
         self,
@@ -418,10 +749,6 @@ class TBOTransformer:
         inbound_groups: list[FlightGroup] = []
         is_international_return: bool = False
 
-        if not results:
-            # do what?
-            pass
-
         if request.trip_type == "oneway":
             outbound_groups = await self._group_flights(
                 itineraries=results[0],
@@ -429,9 +756,6 @@ class TBOTransformer:
                 cache=cache,
             )
         else:
-            # roundtrip => domestic : 2 arrays, international = 1 array (linked)
-            # Results [[],[]] => domestic return
-            # Results [[]] => international return
             if len(results) == 2:
                 outbound_groups = await self._group_flights(
                     itineraries=results[0],
@@ -445,9 +769,6 @@ class TBOTransformer:
                 )
             else:
                 is_international_return = True
-                # here => Segments [ [ {del-bom} , {bom-dxb} ] , [{dxb-del}] ]
-
-                # error => segments me incoming segment not included
                 outbound_groups = await self._group_flights(
                     itineraries=results[0],
                     trace_id=trace_id,
@@ -472,40 +793,27 @@ class TBOTransformer:
             outbound_flights=outbound_groups,
             inbound_flights=inbound_groups,
             is_international_return=is_international_return,
-            # total_results=len(all_groups), # needed?
-            # results_valid_until=datetime.now(timezone.utc) + timedelta(minutes=14),
             available_airlines=self._get_all_airlines(all_groups),
             price_range=self._get_price_range(all_groups),
             stops_available=sorted({g.no_of_stops for g in all_groups}),
         )
 
-    # no need to use async await for in-memory operations on a list
-    # RULE OF THUMB
-    #   1. use async for I/O bound operations (DB, network, file), not CPU bound operations
-    #   2. If there's no await inside the function body, don't make it async
     def _get_price_range(self, groups: list[FlightGroup]) -> dict:
-        """Get min and max price from all fare options in all flight groups."""
         if not groups:
             return {"min": 0, "max": 0}
-
         min_price = float("inf")
         max_price = float("-inf")
         found_any = False
-
         for group in groups:
             if group.fares:
                 found_any = True
                 min_price = min(min_price, float(group.fares[0].total_price))
                 max_price = max(max_price, float(group.fares[-1].total_price))
-
         if not found_any:
             return {"min": 0, "max": 0}
-
         return {"min": min_price, "max": max_price}
 
     def _get_all_airlines(self, groups: list[FlightGroup]) -> list[str]:
-        """Collect unique airlines from all segments in all fares."""
-        # {} creates a set in python
         return list(
             {
                 segment.carrier.name
@@ -516,26 +824,13 @@ class TBOTransformer:
             }
         )
 
-        # airlines_list: set[str] = set()
-        # for group in groups:
-        #     for fare in group.fares:
-        #         for one_way_segment_list in fare.segments:
-        #             for segment in one_way_segment_list:
-        #                 name = segment.carrier.name
-        #                 airlines_list.add(name)
-        # return list(airlines_list)
-
     async def _group_flights(
         self,
         itineraries: list[Itinerary],
         trace_id: str,
         cache: FlightCache,
     ) -> list[FlightGroup]:
-        """Group same flights with different fare types together"""
-        # ditionary of flight groups
         flight_groups: dict[str, list[Itinerary]] = {}
-
-        # collect all flights with same group_id together
         for itinerary in itineraries:
             group_id = self._build_group_id(itinerary)
             if group_id not in flight_groups:
@@ -544,25 +839,20 @@ class TBOTransformer:
 
         result: list[FlightGroup] = []
 
-        # now construct 1 FlightGroup for each group => different list[FareOption]
         for group_id, group_of_itineraries in flight_groups.items():
-            # build fare options , each itineary in group is a fare option
+            # _build_fare_options is now async because cache.set is async
             fares = [
-                self._build_fare_options(itin, trace_id, cache)
+                await self._build_fare_options(itin, trace_id, cache)
                 for itin in group_of_itineraries
             ]
-
-            # sort fares by price ( cheapest first )
             fares.sort(key=lambda f: f.total_price)
 
-            # all the fare options will have same itineraries except things like baggage, fareclass etc
             first_itin = group_of_itineraries[0]
             first_seg = first_itin.Segments[0][0]
             last_seg = first_itin.Segments[0][-1]
 
             no_of_stops = len(first_itin.Segments[0]) - 1
             if no_of_stops > 0:
-                # iterate over segments except last one and get the destination airport codes
                 stop_airports = [
                     seg.Destination.Airport.AirportCode
                     for seg in first_itin.Segments[0][:-1]
@@ -591,42 +881,23 @@ class TBOTransformer:
         result.sort(key=lambda g: g.lowest_price)
         return result
 
-    def _build_fare_options(
+    async def _build_fare_options(
         self,
         itinerary: Itinerary,
         trace_id: str,
-        # direction: Direction,
         cache: FlightCache,
     ) -> FareOption:
-        """Itinerary( basically one result element with ResultIndex) -> FareOption"""
         fare = itinerary.Fare
-
-        # tranform segments
-
-        # HERE => passing just his first array itineray.Segments == [[],[]]
         segments = self._build_segments(itinerary.Segments)
-        # segments = self._build_segments(itinerary.Segments[0])
-
-        # # get fare type from the first segment's SupplierFareCLass
-        # # as Segments: list[list[Segment]]
-        # if itinerary.Segments[0] and itinerary.Segments[0][0].SupplierFareClass:
-        #     fare_type = itinerary.Segments[0][0].SupplierFareClass
-        # else:
-        #     fare_type = None
-
-        # fare_type = itinerary.ResultFareType
 
         outbound_segments = itinerary.Segments[0]
         inbound_segments = itinerary.Segments[1] if len(itinerary.Segments) > 1 else []
 
-        # take SupplierFareClass from 1st flight of outbound segments
         fare_type = None
         for seg in outbound_segments:
             if seg.SupplierFareClass:
                 fare_type = seg.SupplierFareClass
                 break
-
-        # append SupplierFareClass from 1st flight of inbound segments(if present)
         if inbound_segments:
             for seg in inbound_segments:
                 if seg.SupplierFareClass:
@@ -635,22 +906,17 @@ class TBOTransformer:
                     else:
                         fare_type = seg.SupplierFareClass
                     break
-
-        # De-duplication ?
-        # if null => fare_type = Saver
         if fare_type is None:
             fare_type = "Saver"
 
-        # cache
         fare_id = uuid.uuid4().hex[:4]
         provider_ref = {
             "TraceId": trace_id,
             "ResultIndex": itinerary.ResultIndex,
-            # "Source": itinerary.Source, # needed?
             "IsLCC": itinerary.IsLCC,
             "provider": "tbo",
         }
-        cache.set(fare_id=fare_id, data=provider_ref, ttl=900)
+        await cache.set(fare_id=fare_id, data=provider_ref, ttl=900)
 
         return FareOption(
             fare_id=fare_id,
@@ -662,20 +928,14 @@ class TBOTransformer:
             total_price=float(str(fare.PublishedFare)),
             refundable=itinerary.IsRefundable,
             meal_included=itinerary.IsFreeMealAvailable or False,
-            # is_lcc=itinerary.IsLCC,
             passport_required=itinerary.IsPassportRequiredAtTicket or False,
         )
-
-        # get fare per passenger --
 
     def _build_segments(
         self,
         tbo_nested_segments: list[list[Segment]],
-        # direction: Direction,
     ) -> list[list[FlightSegment]]:
-        """Build internal segments from TBO segments."""
         all_flight_segments: list[list[FlightSegment]] = []
-
         for segment_list in tbo_nested_segments:
             flight_segments: list[FlightSegment] = []
             for seg in segment_list:
@@ -729,12 +989,9 @@ class TBOTransformer:
         for leg in itinerary.Segments:
             for seg in leg:
                 parts.append(seg_key(seg))
-
         composite_key = "|".join(parts)
-        # deterministic hasing, same input => same output
         digest = hashlib.blake2s(
             composite_key.encode("utf-8"),
-            digest_size=6,  # 48-bit hash
+            digest_size=6,
         ).hexdigest()
-
         return f"ITI_{digest}"

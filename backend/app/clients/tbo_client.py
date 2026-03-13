@@ -58,6 +58,18 @@ ERROR_CODE_MAP = {
     TBOResponseStatus.AUTH_FAILED: ("AUTH_FAILED", 401),
 }
 
+_SEAT_UNAVAILABLE_MARKERS = (
+    "selected seat has already been reserved",
+    "seat has already been reserved",
+    "seat unavailable",
+)
+
+_MEAL_REQUIRED_MARKERS = (
+    "meal selection is mandatory",
+    "meal is mandatory",
+    "meal selection required",
+)
+
 
 class TBOClient:
     """Client to interact with TBO API."""
@@ -103,7 +115,7 @@ class TBOClient:
             async with httpx.AsyncClient(timeout=30) as client:
                 resp = await client.post(
                     f"{self.shared_base_url}/Authenticate",
-                    json=payload.model_dump(by_alias=True),
+                    json=payload.model_dump(by_alias=True, exclude_none=True),
                     headers=self.headers,
                 )
 
@@ -165,7 +177,7 @@ class TBOClient:
         async with httpx.AsyncClient(timeout=30) as client:
             resp = await client.post(
                 f"{self.shared_base_url}/Logout",
-                json=payload.model_dump(by_alias=True),
+                json=payload.model_dump(by_alias=True, exclude_none=True),
                 headers=self.headers,
             )
 
@@ -205,9 +217,17 @@ class TBOClient:
             tbo_response.get("Response", {}).get("Error", {}).get("ErrorMessage")
         )
 
-        provider_code, http_status = ERROR_CODE_MAP.get(
-            error_code, ("UNKNOWN_ERROR", 500)
-        )
+        normalized_msg = (error_msg or "").lower()
+        if any(marker in normalized_msg for marker in _SEAT_UNAVAILABLE_MARKERS):
+            provider_code = "SEAT_UNAVAILABLE"
+            http_status = 409
+        elif any(marker in normalized_msg for marker in _MEAL_REQUIRED_MARKERS):
+            provider_code = "MEAL_REQUIRED"
+            http_status = 400
+        else:
+            provider_code, http_status = ERROR_CODE_MAP.get(
+                error_code, ("UNKNOWN_ERROR", 500)
+            )
 
         logger.error(
             "%s ERROR (%s): %s",
@@ -215,6 +235,7 @@ class TBOClient:
             provider_code,
             error_msg,
         )
+        logger.error("Full TBO error response: %s", json.dumps(tbo_response, indent=2))
         raise ExternalProviderError(
             provider_code=provider_code,
             http_status=http_status,
@@ -224,13 +245,16 @@ class TBOClient:
     async def search(self, payload: TBOSearchRequest) -> TBOSearchResponse:
         """Perform flight search"""
         token = await self.authenticate()
-        payload_data = payload.model_dump(by_alias=True, mode="json")
+        payload_data = payload.model_dump(by_alias=True, exclude_none=True, mode="json")
         payload_data["TokenId"] = token
 
         url = f"{self.air_base_url}/Search"
         self.headers["Accept-Encoding"] = "gzip"
 
-        async with httpx.AsyncClient(timeout=60) as client:
+        logger.info("→ TBO /Search called")
+        logger.info("Request payload: %s", json.dumps(payload_data, indent=2))
+
+        async with httpx.AsyncClient(timeout=360) as client:
             resp = await client.post(
                 url,
                 json=payload_data,
@@ -246,7 +270,7 @@ class TBOClient:
         # try to parse the response
         try:
             data = resp.json()
-            # print("TBO Search Response Data:", data)
+            # logger.info("TBO Search response: %s", json.dumps(data, indent=2))
             self._check_response_status(data, context="TBO Search")
             parsed = TBOSearchResponse(**data)
             return parsed
@@ -259,11 +283,14 @@ class TBOClient:
 
     async def get_fare_rule(self, payload: TBOFareRuleRequest) -> TBOFareRuleResponse:
         token = await self.authenticate()
-        payload_data = payload.model_dump(by_alias=True, mode="json")
+        payload_data = payload.model_dump(by_alias=True, exclude_none=True, mode="json")
         payload_data["TokenId"] = token
 
         url = f"{self.air_base_url}/FareRule"
         self.headers["Accept-Encoding"] = "gzip"
+
+        logger.info("→ TBO /FareRule called")
+        logger.info("Request payload: %s", json.dumps(payload_data, indent=2))
 
         async with httpx.AsyncClient(timeout=60) as client:
             resp = await client.post(
@@ -297,11 +324,14 @@ class TBOClient:
         self, payload: TBOFareQuoteRequest
     ) -> TBOFareQuoteResponse:
         token = await self.authenticate()
-        payload_data = payload.model_dump(by_alias=True, mode="json")
+        payload_data = payload.model_dump(by_alias=True, exclude_none=True, mode="json")
         payload_data["TokenId"] = token
 
         url = f"{self.air_base_url}/FareQuote"
         self.headers["Accept-Encoding"] = "gzip"
+
+        logger.info("→ TBO /FareQuote called")
+        logger.info("Request payload: %s", json.dumps(payload_data, indent=2))
 
         async with httpx.AsyncClient(timeout=60) as client:
             resp = await client.post(
@@ -317,6 +347,7 @@ class TBOClient:
         # httpx automatically decompresses gzip, so just parse JSON directly
         try:
             data = resp.json()
+            logger.info("TBO FareQuote response: %s", json.dumps(data, indent=2))
         except Exception as e:
             logger.exception("Invalid or unexpected JSON in TBO FareQuote response")
             raise Exception("Invalid response from TBO") from e
@@ -332,11 +363,14 @@ class TBOClient:
 
     async def get_ssr(self, payload: TBOSSRRequest) -> TBOSSRResponse:
         token = await self.authenticate()
-        payload_data = payload.model_dump(by_alias=True, mode="json")
+        payload_data = payload.model_dump(by_alias=True, exclude_none=True, mode="json")
         payload_data["TokenId"] = token
 
         url = f"{self.air_base_url}/SSR"
         self.headers["Accept-Encoding"] = "gzip"
+
+        logger.info("→ TBO /SSR called")
+        logger.info("Request payload: %s", json.dumps(payload_data, indent=2))
 
         async with httpx.AsyncClient(timeout=60) as client:
             resp = await client.post(
@@ -352,14 +386,15 @@ class TBOClient:
         # httpx automatically decompresses gzip, so just parse JSON directly
         try:
             data = resp.json()
+            logger.info("TBO SSR response: %s", json.dumps(data, indent=2))
         except Exception as e:
             logger.exception("Invalid or unexpected JSON in TBO SSR response")
             raise Exception("Invalid response from TBO") from e
 
         # try to parse the response
         try:
-            print(payload_data)
-            print("TBO SSR Response Data:", data)
+            logger.debug("TBO SSR request: %s", json.dumps(payload_data, indent=2))
+            # logger.info("TBO SSR response: %s", json.dumps(data, indent=2))
             self._check_response_status(data, context="TBO SSR")
 
             # dump data for debugging
@@ -375,13 +410,17 @@ class TBOClient:
     async def book_flight(self, payload: TBOBookRequest) -> TBOBookResponse:
         """Only non-LCC"""
         token = await self.authenticate()
-        payload_data = payload.model_dump(by_alias=True, mode="json")
+        payload_data = payload.model_dump(by_alias=True, exclude_none=True, mode="json")
         payload_data["TokenId"] = token
 
         url = f"{self.air_base_url}/Book"
         self.headers["Accept-Encoding"] = "gzip"
 
-        async with httpx.AsyncClient(timeout=60) as client:
+        logger.info("→ TBO /Book called")
+        safe_payload = {k: v for k, v in payload_data.items() if k != "TokenId"}
+        logger.info("TBO Book request: %s", json.dumps(safe_payload, indent=2))
+
+        async with httpx.AsyncClient(timeout=300) as client:
             resp = await client.post(
                 url,
                 json=payload_data,
@@ -395,15 +434,18 @@ class TBOClient:
         # httpx automatically decompresses gzip, so just parse JSON directly
         try:
             data = resp.json()
+            logger.info("TBO Book response: %s", json.dumps(data, indent=2))
         except Exception as e:
             logger.exception("Invalid or unexpected JSON in TBO Book response")
             raise Exception("Invalid response from TBO") from e
 
         # try to parse the response
         try:
-            # print(data)
+            self._check_response_status(data, context="TBO Book")
             parsed = TBOBookResponse(**data)
             return parsed
+        except ExternalProviderError:
+            raise
         except Exception as e:
             logger.exception("Failed to parse TBO Book response")
             raise Exception("Unexpected response structure from TBO") from e
@@ -413,13 +455,17 @@ class TBOClient:
     ) -> TBOTicketResponse:
         """Generate ticket for LCC flights"""
         token = await self.authenticate()
-        payload_data = payload.model_dump(by_alias=True, mode="json")
+        payload_data = payload.model_dump(by_alias=True, exclude_none=True, mode="json")
         payload_data["TokenId"] = token
 
         url = f"{self.air_base_url}/Ticket"
         self.headers["Accept-Encoding"] = "gzip"
 
-        async with httpx.AsyncClient(timeout=60) as client:
+        logger.info("→ TBO /Ticket (LCC) called")
+        safe_payload = {k: v for k, v in payload_data.items() if k != "TokenId"}
+        logger.info("TBO TicketLCC request: %s", json.dumps(safe_payload, indent=2))
+
+        async with httpx.AsyncClient(timeout=300) as client:
             resp = await client.post(
                 url,
                 json=payload_data,
@@ -433,15 +479,18 @@ class TBOClient:
         # httpx automatically decompresses gzip, so just parse JSON directly
         try:
             data = resp.json()
+            logger.info("TBO TicketLCC response: %s", json.dumps(data, indent=2))
         except Exception as e:
             logger.exception("Invalid or unexpected JSON in TBO TicketLCC response")
             raise Exception("Invalid response from TBO") from e
 
         # try to parse the response
         try:
-            # print(data)
+            self._check_response_status(data, context="TBO TicketLCC")
             parsed = TBOTicketResponse(**data)
             return parsed
+        except ExternalProviderError:
+            raise
         except Exception as e:
             logger.exception("Failed to parse TBO TicketLCC response")
             raise Exception("Unexpected response structure from TBO") from e
@@ -451,13 +500,17 @@ class TBOClient:
     ) -> TBOTicketResponse:
         """Generate ticket for non-LCC flights"""
         token = await self.authenticate()
-        payload_data = payload.model_dump(by_alias=True, mode="json")
+        payload_data = payload.model_dump(by_alias=True, exclude_none=True, mode="json")
         payload_data["TokenId"] = token
 
         url = f"{self.air_base_url}/Ticket"
         self.headers["Accept-Encoding"] = "gzip"
 
-        async with httpx.AsyncClient(timeout=60) as client:
+        logger.info("→ TBO /Ticket (NonLCC) called")
+        safe_payload = {k: v for k, v in payload_data.items() if k != "TokenId"}
+        logger.info("TBO TicketNonLCC request: %s", json.dumps(safe_payload, indent=2))
+
+        async with httpx.AsyncClient(timeout=300) as client:
             resp = await client.post(
                 url,
                 json=payload_data,
@@ -471,25 +524,108 @@ class TBOClient:
         # httpx automatically decompresses gzip, so just parse JSON directly
         try:
             data = resp.json()
+            logger.info("TBO TicketNonLCC response: %s", json.dumps(data, indent=2))
         except Exception as e:
             logger.exception("Invalid or unexpected JSON in TBO TicketNonLCC response")
             raise Exception("Invalid response from TBO") from e
 
         # try to parse the response
         try:
-            # print(data)
+            self._check_response_status(data, context="TBO TicketNonLCC")
             parsed = TBOTicketResponse(**data)
             return parsed
+        except ExternalProviderError:
+            raise
         except Exception as e:
             logger.exception("Failed to parse TBO TicketNonLCC response")
             raise Exception("Unexpected response structure from TBO") from e
+
+    async def get_booking_details_with_retry(
+        self,
+        end_user_ip: str,
+        *,
+        pnr: str | None = None,
+        booking_id: int | None = None,
+        trace_id: str | None = None,
+        first_name: str | None = None,
+        last_name: str | None = None,
+        max_retries: int = 12,
+        interval_seconds: float = 12.0,
+    ) -> TBOGetBookingDetailsResponse | None:
+        """Poll GetBookingDetails after a timeout to check if booking succeeded.
+
+        When TBO Book/Ticket times out, the booking may have actually succeeded.
+        Supports multiple lookup patterns: BookingId, PNR+Name, or TraceId.
+        Polls up to max_retries times at interval_seconds apart.
+        """
+        token = await self.authenticate()
+        lookup_desc = f"PNR={pnr} BookingId={booking_id} TraceId={trace_id}"
+
+        for attempt in range(1, max_retries + 1):
+            logger.info(
+                "GetBookingDetails retry %d/%d for %s",
+                attempt,
+                max_retries,
+                lookup_desc,
+            )
+            if attempt > 1:
+                await asyncio.sleep(interval_seconds)
+
+            try:
+                payload = TBOGetBookingDetailsRequest(
+                    EndUserIp=end_user_ip,
+                    TokenId=token,
+                    PNR=pnr,
+                    BookingId=booking_id,
+                    TraceId=trace_id,
+                    FirstName=first_name,
+                    LastName=last_name,
+                )
+                response = await self.get_booking_details(payload)
+                error_message = (
+                    response.Response.Error.ErrorMessage
+                    if response.Response.Error and response.Response.Error.ErrorMessage
+                    else ""
+                )
+                if "booking under process" in error_message.lower():
+                    logger.info(
+                        "GetBookingDetails still under process on attempt %d for %s",
+                        attempt,
+                        lookup_desc,
+                    )
+                    continue
+
+                itin = response.Response.FlightItinerary
+                if itin:
+                    logger.info(
+                        "GetBookingDetails resolved on attempt %d: PNR=%s status=%s",
+                        attempt,
+                        itin.PNR,
+                        itin.Status,
+                    )
+                    return response
+                logger.info(
+                    "GetBookingDetails did not return itinerary on attempt %d for %s",
+                    attempt,
+                    lookup_desc,
+                )
+            except Exception as e:
+                logger.warning("GetBookingDetails retry %d failed: %s", attempt, str(e))
+                continue
+
+        logger.warning(
+            "GetBookingDetails gave up after %d retries for %s",
+            max_retries,
+            lookup_desc,
+        )
+        return None
 
     async def get_booking_details(
         self, payload: TBOGetBookingDetailsRequest
     ) -> TBOGetBookingDetailsResponse:
         """Get booking details by PNR and Booking ID"""
         token = await self.authenticate()
-        payload_data = payload.model_dump(by_alias=True, mode="json")
+        payload_data = payload.model_dump(by_alias=True, exclude_none=True, mode="json")
         payload_data["TokenId"] = token
 
         url = f"{self.air_base_url}/GetBookingDetails"

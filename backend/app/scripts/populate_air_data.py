@@ -2,7 +2,7 @@
 import asyncio
 import os
 import pandas as pd
-from sqlalchemy import select
+from sqlalchemy import select, func
 
 from app.db.database import AsyncSessionLocal
 from app.db.models.air_data import Airline, Airport
@@ -24,6 +24,12 @@ def find_logo_for_code(code: str, static_dir: str = "static/logos") -> str | Non
 
 async def populate_air_data():
     async with AsyncSessionLocal() as session:
+        # Skip if data already populated
+        result = await session.execute(select(func.count()).select_from(Airline))
+        if result.scalar() > 0:
+            print("✅ Air data already populated, skipping.")
+            return
+
         # --- Load airlines ---
         airlines_path = os.path.join("data", "Airline Code.xlsx")
         if not os.path.exists(airlines_path):

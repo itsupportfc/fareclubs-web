@@ -17,12 +17,21 @@ from .common import FareRule, Segment
 
 
 class TBOGetBookingDetailsRequest(TBOBaseSchema):
-    """TBO GetBookingDetails API request"""
+    """TBO GetBookingDetails API request.
+
+    Supports multiple lookup patterns per TBO docs:
+      - BookingId (+ optional PNR)
+      - PNR + FirstName/LastName
+      - TraceId
+    """
 
     EndUserIp: str
     TokenId: str
-    PNR: str
-    BookingId: int
+    BookingId: int | None = None
+    PNR: str | None = None
+    TraceId: str | None = None
+    FirstName: str | None = None
+    LastName: str | None = None
 
 
 # ==============================================================================
@@ -65,9 +74,9 @@ class SegmentAdditionalInfoModel(TBOBaseSchema):
     NVA: str
     NVB: str
     Baggage: str
-    Meal: str
-    Seat: str
-    SpecialService: str
+    Meal: str | None = None
+    Seat: str | None = None
+    SpecialService: str | None = None
     CabinBaggage: str
 
 

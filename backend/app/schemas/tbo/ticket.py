@@ -27,7 +27,7 @@ from .common import (
     Meal as MealModel,
 )
 from .common import (
-    SeatDynamic as SeatDynamicModel,
+    Seat as SeatModel,
 )
 from .enums import JourneyType as JourneyTypeEnum
 from .enums import PassengerType as PassengerTypeEnum
@@ -42,10 +42,10 @@ class PassengerFareSmall(TBOBaseSchema):
 
     BaseFare: float
     Tax: float
-    YQTax: float | None = None
-    AdditionalTxnFeeOfrd: float | None = None
-    AdditionalTxnFeePub: float | None = None
-    PGCharge: float | None = None
+    YQTax: float = 0
+    AdditionalTxnFeeOfrd: float = 0
+    AdditionalTxnFeePub: float = 0
+    PGCharge: float = 0
 
 
 class TicketPassengerRequest(TBOBaseSchema):
@@ -54,8 +54,8 @@ class TicketPassengerRequest(TBOBaseSchema):
     Title: str
     FirstName: str
     LastName: str
-    PaxType: int
-    Gender: int
+    PaxType: int  # 1=Adult, 2=Child, 3=Infant
+    Gender: int  # 1=Male, 2=Female
     DateOfBirth: str  # Note: string format for ticket
     AddressLine1: str
     AddressLine2: str | None = None
@@ -64,7 +64,7 @@ class TicketPassengerRequest(TBOBaseSchema):
     CountryName: str | None = None
     ContactNo: str
     Email: str
-    IsLeadPax: bool
+    IsLeadPax: bool  # only one passenger can be lead pax
     Nationality: str
 
     Fare: PassengerFareSmall
@@ -73,11 +73,23 @@ class TicketPassengerRequest(TBOBaseSchema):
     IsPassportRequired: bool | None = None
     PassportNo: str | None = None
     PassportExpiry: datetime | None = None
+    PassportIssueDate: datetime | None = None
+    PassportIssueCountryCode: str | None = None
+
+    # PAN card
+    PAN: str | None = None
+
+    # GST (lead pax only)
+    GSTCompanyAddress: str | None = None
+    GSTCompanyContactNumber: str | None = None
+    GSTCompanyName: str | None = None
+    GSTNumber: str | None = None
+    GSTCompanyEmail: str | None = None
 
     # SSR selections
     Baggage: list[BaggageModel] | None = None
-    Meal: list[MealModel] | None = None
-    SeatDynamic: list[SeatDynamicModel] | None = None
+    MealDynamic: list[MealModel] | None = None
+    SeatDynamic: list[SeatModel] | None = None
 
 
 class TBOTicketLCCRequest(TBOBaseSchema):
@@ -95,15 +107,24 @@ class TBOTicketLCCRequest(TBOBaseSchema):
 # ==============================================================================
 
 
+class PassportInfo(TBOBaseSchema):
+    """Passport details for Non-LCC ticket request"""
+
+    PassportNumber: str
+    PassportExpiry: str
+    DateOfBirth: str
+    PaxId: int
+
+
 class TBOTicketNonLCCRequest(TBOBaseSchema):
     """TBO Ticket API request for Non-LCC airlines"""
 
     EndUserIp: str
     TokenId: str
     TraceId: str
-    ResultIndex: str
     PNR: str
     BookingId: int
+    Passport: list[PassportInfo] | None = None
     IsPriceChangeAccepted: bool | None = None
 
 
@@ -133,8 +154,8 @@ class DocumentDetailsModel(TBOBaseSchema):
     """Travel document details"""
 
     DocumentExpiryDate: str
-    DocumentIssueDate: str
-    DocumentIssuingCountry: str
+    DocumentIssueDate: str | None = None
+    DocumentIssuingCountry: str | None = None
     DocumentNumber: str
     DocumentTypeId: str
     PaxId: int
@@ -145,8 +166,8 @@ class SSRDetail(TBOBaseSchema):
     """SSR detail in response"""
 
     Detail: str
-    SSRCode: str
-    SSRStatus: str | None = None
+    SSRCode: str = Field(alias="SsrCode")
+    SSRStatus: str | None = Field(default=None, alias="SsrStatus")
     Status: int
 
 
@@ -157,9 +178,9 @@ class SegmentAdditionalInfoModel(TBOBaseSchema):
     NVA: str  # Not valid after
     NVB: str  # Not valid before
     Baggage: str
-    Meal: str
-    Seat: str
-    SpecialService: str
+    Meal: str | None = None
+    Seat: str | None = None
+    SpecialService: str | None = None
     CabinBaggage: str
 
 
@@ -192,7 +213,7 @@ class TicketPassengerResponse(TBOBaseSchema):
     DateOfBirth: datetime
     Gender: int
 
-    IsPanRequired: bool | None = None
+    IsPanRequired: bool | None = Field(default=None, alias="IsPANRequired")
     IsPassportRequired: bool | None = None
     PAN: str | None = None
     PassportNo: str | None = None
@@ -205,11 +226,9 @@ class TicketPassengerResponse(TBOBaseSchema):
     Email: str
     IsLeadPax: bool
 
-    # MISSING
-    # Baggage: list[BaggageModel] | None = None
-    # MealDynamic : list[MealModel] | None = None
-
-    # SeatDynamic : list[SeatDynamicModel] | None = None
+    Baggage: list[BaggageModel] | None = None
+    MealDynamic: list[MealModel] | None = None
+    SeatDynamic: list[SeatModel] | None = None
 
     FFAirlineCode: str | None = None
     FFNumber: str | None = None
@@ -218,9 +237,11 @@ class TicketPassengerResponse(TBOBaseSchema):
     BarcodeDetails: BarcodeDetailsModel | None = None
     DocumentDetails: list[DocumentDetailsModel] | None = None
     GuardianDetails: dict | None = None
-    SSR: list[SSRDetail] | None = None
+    IsReissued: bool | None = None
+    SSR: list[SSRDetail] | None = Field(default=None, alias="Ssr")
     Ticket: TicketDetails | None = None
     SegmentAdditionalInfo: list[SegmentAdditionalInfoModel] | None = None
+    SegmentAdditionalInfoForReturn: list[SegmentAdditionalInfoModel] | None = None
 
 
 class PNRHistoryModel(TBOBaseSchema):
@@ -249,8 +270,8 @@ class InvoiceModel(TBOBaseSchema):
 class PenaltyChargesModel(TBOBaseSchema):
     """Penalty charges info"""
 
-    ReissueCharge: str
-    CancellationCharge: str
+    ReissueCharge: str | None = None
+    CancellationCharge: str | None = None
 
 
 class TicketItinerary(TBOBaseSchema):
@@ -293,7 +314,7 @@ class TicketItinerary(TBOBaseSchema):
     FareClassification: str | None = None
     IsAutoReissuanceAllowed: bool | None = None
     IsSeatsBooked: bool | None = None
-    IssuancePCC: str | None = None
+    IssuancePCC: str | None = Field(default=None, alias="IssuancePcc")
     JourneyType: int | None = None
     SearchCombinationType: int | None = None
     SupplierFareClasses: str | None = None
@@ -323,7 +344,7 @@ class TicketInnerResponse(TBOBaseSchema):
     TicketStatus: Annotated[
         int,
         Field(
-            description="Failed = 0, Successful = 1, NotSaved = 2, NotCreated = 3, NotAllowed = 4, InProgress = 5, TicketeAlreadyCreated= 6, PriceChanged = 8, OtherError = 9"
+            description="Failed = 0, Successful = 1, NotSaved = 2, NotCreated = 3, NotAllowed = 4, InProgress = 5, TicketAlreadyCreated = 6, PriceChanged = 8, OtherError = 9"
         ),
     ]
 
@@ -335,7 +356,7 @@ class TBOTicketResponseBody(TBOBaseSchema):
     Error: TBOError
     TraceId: str
     B2B2BStatus: bool | None = None
-    Response: TicketInnerResponse
+    Response: TicketInnerResponse | None = None
 
 
 class TBOTicketResponse(TBOBaseSchema):

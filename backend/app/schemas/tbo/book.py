@@ -25,14 +25,21 @@ class MealSelection(TBOBaseSchema):
     """Meal selection for passenger"""
 
     Code: str
-    Description: str
+    Description: int
 
 
-class SeatPref(TBOBaseSchema):
+class SeatDynamicSelection(TBOBaseSchema):
     """Seat selection for passenger"""
 
     Code: str
-    Description: str
+    Description: int
+
+
+class BaggageSelection(TBOBaseSchema):
+    """Baggage selection for passenger"""
+
+    Code: str
+    Description: int
 
 
 class PassengerFare(TBOBaseSchema):
@@ -44,6 +51,7 @@ class PassengerFare(TBOBaseSchema):
     YQTax: float | None = None
     AdditionalTxnFeeOfrd: float | None = None
     AdditionalTxnFeePub: float | None = None
+    PGCharge: float | None = None
     OtherCharges: float | None = None
     Discount: float | None = None
     PublishedFare: float | None = None
@@ -67,6 +75,11 @@ class BookPassenger(TBOBaseSchema):
     # Passport (required for international)
     PassportNo: str | None = None
     PassportExpiry: datetime | None = None
+    PassportIssueDate: datetime | None = None
+    PassportIssueCountryCode: str | None = None
+
+    # PAN card (Indian domestic, when IsPanRequiredAtBook=true)
+    PAN: str | None = None
 
     # Contact
     AddressLine1: str
@@ -88,11 +101,9 @@ class BookPassenger(TBOBaseSchema):
 
     # Fare and SSR
     Fare: PassengerFare
-    # Meal, Seat selections should be inside passenger model
-    Meal: MealSelection | None = None
-    SeatPreference: SeatPref | None = None
-    # baggage??
-    
+    MealDynamic: MealSelection | None = None
+    SeatDynamic: SeatDynamicSelection | None = None
+    Baggage: BaggageSelection | None = None
 
 
 class TBOBookRequest(TBOBaseSchema):
@@ -122,6 +133,7 @@ class ResponsePassenger(TBOBaseSchema):
     Gender: Annotated[int, Field(description=" 1=Male, 2=Female ??? need to confirm")]
     PassportNo: str | None = None
     PassportExpiry: datetime | None = None
+    AddressLine1: str | None = None
     City: str | None = None
     CountryCode: str | None = None
     CountryName: str | None = None
@@ -129,10 +141,16 @@ class ResponsePassenger(TBOBaseSchema):
     ContactNo: str | None = None
     Email: str | None = None
     IsLeadPax: bool
+    FFAirlineCode: str | None = None
+    FFNumber: str | None = None
     Fare: FareModel
 
     Meal: MealSelection | None = None
-    Seat: SeatPref | None = None
+    Seat: SeatDynamicSelection | None = None
+    Baggage: list | None = None
+    Ssr: list | None = None
+    SegmentAdditionalInfo: list | None = None
+    DocumentDetails: list | None = None
 
     GSTCompanyAddress: str | None = None
     GSTCompanyContactNumber: str | None = None
@@ -140,7 +158,7 @@ class ResponsePassenger(TBOBaseSchema):
     GSTCompanyName: str | None = None
     GSTNumber: str | None = None
 
-    BarCodeDetails: BarcodeDetailsModel | None = None
+    BarcodeDetails: BarcodeDetailsModel | None = None
 
 
 class FlightItineraryModel(TBOBaseSchema):
@@ -181,9 +199,9 @@ class BookInnerResponse(TBOBaseSchema):
     SSRDenied: bool
     SSRMessage: str | None = None
     Status: Annotated[
-        str,
+        int,
         Field(
-            description="[NotSet = 0, Successful = 1, Failed = 2, OtherFare = 3, OtherClass = 4, BookedOther = 5, NotConfirmed = 6]"
+            description="NotSet = 0, Successful = 1, Failed = 2, OtherFare = 3, OtherClass = 4, BookedOther = 5, NotConfirmed = 6"
         ),
     ]
     IsPriceChanged: bool
@@ -197,7 +215,7 @@ class TBOBookResponseBody(TBOBaseSchema):
     ResponseStatus: int
     Error: TBOError
     TraceId: str
-    Response: BookInnerResponse
+    Response: BookInnerResponse | None = None
 
 
 class TBOBookResponse(TBOBaseSchema):

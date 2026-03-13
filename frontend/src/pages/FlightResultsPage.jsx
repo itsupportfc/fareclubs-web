@@ -1,143 +1,92 @@
-/**
- * FlightResultsPage Component
- *
- * Displays search results after flight search completes
- */
-
-import { useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState } from "react";
 import useFlightStore from "../store/useFlightStore";
-import LoaderOverlay from "../components/LoaderOverlay";
+import Navbar from "../components/Home/Navbar";
+import Sidebar from "../components/search/Sidebar";
+import SmallSearch from "../components/search/SmallSearch";
+import FlightPriceCard from "../components/search/FlightPriceCard";
+import Offers from "../components/search/Offers";
+import LoaderOverlay from "../components/common/LoaderOverlay";
+import FareModal from "../components/search/FareModal";
 
-function FlightResultsPage() {
-    const navigate = useNavigate();
-    const { searchResults, isLoading } = useFlightStore();
+export default function FlightResultsPage() {
+  const {
+    outboundFlights,
+    origin,
+    destination,
+    adults,
+    children,
+    infants,
+    isLoading,
+  } = useFlightStore();
 
-    // Redirect to home if no search results
-    useEffect(() => {
-        if (!isLoading && (!searchResults || !searchResults.Response)) {
-            navigate("/");
-        }
-    }, [searchResults, isLoading, navigate]);
+  const passengers = { adults, children, infants };
 
-    // Show loader while searching
-    if (isLoading) {
-        return <LoaderOverlay />;
-    }
+  const [selectedFlight, setSelectedFlight] = useState(null);
 
-    // If no results yet, show nothing (will redirect)
-    if (!searchResults || !searchResults.Response) {
-        return null;
-    }
+  /* -------------------------------------------
+     HANDLE FARE VIEW (STORE SELECTED FLIGHT)
+  -------------------------------------------- */
+  const handleViewFares = (flight) => {
+    setSelectedFlight(flight);
 
-    const { Response } = searchResults;
-    const flights = Response.Results?.[0] || [];
+    // ✅ cache selected flight
+    setCache("selectedFlight", flight);
+  };
 
-    return (
-        <div className="min-h-screen bg-gray-100">
-            {/* Header with search summary */}
-            <div className="bg-white shadow-sm border-b">
-                <div className="max-w-7xl mx-auto px-4 py-4">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <h1 className="text-2xl font-bold text-gray-900">
-                                {Response.Origin} → {Response.Destination}
-                            </h1>
-                            <p className="text-gray-600">
-                                {flights.length} flights found
-                            </p>
-                        </div>
-                        <button
-                            onClick={() => navigate("/")}
-                            className="px-4 py-2 text-primary border border-primary rounded-lg hover:bg-primary hover:text-white transition-colors"
-                        >
-                            Modify Search
-                        </button>
-                    </div>
-                </div>
-            </div>
+  if (isLoading) return <LoaderOverlay />;
 
-            {/* Main content */}
-            <div className="max-w-7xl mx-auto px-4 py-6">
-                <div className="bg-white rounded-lg shadow p-6">
-                    <h2 className="text-xl font-semibold mb-4">
-                        Available Flights ({flights.length})
-                    </h2>
+  return (
+    <div className="min-h-screen bg-gray-50 mt-16">
+      <Navbar />
 
-                    {/* Temporary: Show raw JSON for verification */}
-                    <div className="space-y-4">
-                        {flights.slice(0, 5).map((flight, index) => (
-                            <div
-                                key={flight.ResultIndex || index}
-                                className="border border-gray-200 rounded-lg p-4"
-                            >
-                                {/* Quick preview of flight data */}
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <p className="font-semibold">
-                                            {flight.AirlineCode} -{" "}
-                                            {
-                                                flight.Segments?.[0]?.[0]
-                                                    ?.Airline?.FlightNumber
-                                            }
-                                        </p>
-                                        <p className="text-sm text-gray-600">
-                                            {
-                                                flight.Segments?.[0]?.[0]
-                                                    ?.Origin?.Airport?.CityName
-                                            }{" "}
-                                            →{" "}
-                                            {
-                                                flight.Segments?.[0]?.[0]
-                                                    ?.Destination?.Airport
-                                                    ?.CityName
-                                            }
-                                        </p>
-                                        <p className="text-sm text-gray-500">
-                                            {new Date(
-                                                flight.Segments?.[0]?.[0]?.Origin?.DepTime
-                                            ).toLocaleTimeString()}{" "}
-                                            -{" "}
-                                            {new Date(
-                                                flight.Segments?.[0]?.[0]?.Destination?.ArrTime
-                                            ).toLocaleTimeString()}
-                                        </p>
-                                    </div>
-                                    <div className="text-right">
-                                        <p className="text-2xl font-bold text-primary">
-                                            ₹
-                                            {flight.Fare?.OfferedFare?.toLocaleString(
-                                                "en-IN"
-                                            )}
-                                        </p>
-                                        <p className="text-sm text-gray-600">
-                                            per adult
-                                        </p>
-                                    </div>
-                                </div>
-
-                                {/* Raw JSON for debugging (temporary) */}
-                                <details className="mt-4">
-                                    <summary className="cursor-pointer text-sm text-gray-500 hover:text-gray-700">
-                                        View raw JSON
-                                    </summary>
-                                    <pre className="mt-2 p-3 bg-gray-50 rounded text-xs overflow-auto max-h-60">
-                                        {JSON.stringify(flight, null, 2)}
-                                    </pre>
-                                </details>
-                            </div>
-                        ))}
-
-                        {flights.length > 5 && (
-                            <p className="text-center text-gray-500">
-                                ... and {flights.length - 5} more flights
-                            </p>
-                        )}
-                    </div>
-                </div>
-            </div>
+      {/* HEADER */}
+      <div className="bg-gradient-to-r from-[#FF2E57] to-[#0047FF] text-white">
+        <div className="max-w-7xl mx-auto px-4 py-5 space-y-2">
+          <SmallSearch />
+          <h1 className="text-2xl md:text-3xl font-bold">
+            Flights from {origin} → {destination}
+          </h1>
+          <p className="text-orange-100 text-sm">
+            {outboundFlights.length} flights found
+          </p>
         </div>
-    );
-}
+      </div>
 
-export default FlightResultsPage;
+      {/* MAIN CONTENT */}
+      <div className="max-w-7xl mx-auto px-4 py-10 grid grid-cols-1 lg:grid-cols-5 gap-6">
+        <div className="lg:col-span-1">
+          <Sidebar />
+        </div>
+
+        <div className="lg:col-span-3 space-y-4">
+          {outboundFlights.length === 0 ? (
+            <div className="text-center py-24 text-gray-500">
+              No outbound flights available
+            </div>
+          ) : (
+            outboundFlights.map((flight) => (
+              <FlightPriceCard
+                key={flight.groupId}
+                flight={flight}
+                onViewFares={handleViewFares} // ✅ cached here
+              />
+            ))
+          )}
+        </div>
+
+        <div className="lg:col-span-1 hidden lg:block">
+          <Offers />
+        </div>
+      </div>
+
+      {/* FARE MODAL */}
+      {selectedFlight && (
+        <FareModal
+          flight={selectedFlight}
+          passengers={passengers}
+          onClose={() => setSelectedFlight(null)}
+        />
+      )}
+    </div>
+  );
+}

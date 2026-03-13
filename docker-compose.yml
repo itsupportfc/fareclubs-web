@@ -5,67 +5,51 @@ services:
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: postgres # DB name
+      POSTGRES_DB: postgres
+    ports:
+      - "5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
     networks:
       - appnet
-  
+
   redis:
-    image: redis:7
+    image: redis:7-alpine
     restart: always
+    ports:
+      - "6379:6379"
     networks:
       - appnet
 
   backend:
     build:
-      context: ./backend # path to the dockerfile
+      context: ./backend
       dockerfile: Dockerfile
     restart: always
     env_file:
       - ./.env
       - ./backend/.env
     depends_on:
-      - db
-      - redis
-    expose:
-      - "8000"    # accessible to other containers only
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    ports:
+      - "8000:8000"
     volumes:
       - ./backend:/app
-    networks:
-      - appnet
-
-  # frontend:
-  #   build:
-  #     context: ./frontend
-  #     dockerfile: Dockerfile
-  #   restart: "no"       # optional: we don't need to run frontend in prod, only build it
-  #   env_file:
-  #     - ./.env
-  #     - ./frontend/.env
-  #   depends_on:
-  #     - backend
-  #   expose:
-  #     - 80
-  #   # volumes:
-  #   #   - ./frontend:/app
-  #   #   - /app/node_modules # exclude node_modules from the volume
-  #   networks:
-  #     - appnet
-
-  # Single root nginx serves the frontend static files and proxies /api to backend
-  nginx:
-  # build image form frontend/Dockerfile
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    restart: always
-    ports: ["80:80"] # only nginx is exposed to host
-    # but mount a config file from root/nginx
-    volumes:
-      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
-    depends_on:
-      - backend
+      - ./logs:/app/logs
+    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
     networks:
       - appnet
 
@@ -74,4 +58,4 @@ volumes:
 
 networks:
   appnet:
-    driver: bridge 
+    driver: bridge

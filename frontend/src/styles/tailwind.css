@@ -28,3 +28,12 @@
   --animate-plane-fly: plane-fly 3s ease-in-out infinite;
   --animate-progress: progress 1.5s ease-in-out infinite;
 }
+@keyframes plane-glide {
+  0% { transform: translateX(0) translateY(-50%); }
+  50% { transform: translateX(100px) translateY(-60%); }
+  100% { transform: translateX(200px) translateY(-50%); }
+}
+
+.animate-plane-glide {
+  animation: plane-glide 2s ease-in-out infinite alternate;
+}

@@ -18,11 +18,12 @@ from .base import TBOBaseSchema, TBOError
 
 # Book
 from .book import (
+    BaggageSelection,
     BookPassenger,
     # FlightItinerary,
     MealSelection,
     PassengerFare,
-    SeatPref,
+    SeatDynamicSelection,
     TBOBookRequest,
     TBOBookResponse,
 )
@@ -154,7 +155,7 @@ __all__ = [
     # "FlightItinerary",
     "MealSelection",
     "PassengerFare",
-    "SeatPref",
+    "SeatDynamicSelection",
     "TBOBookRequest",
     "TBOBookResponse",
     # Ticket

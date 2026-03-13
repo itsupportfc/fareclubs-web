@@ -20,6 +20,7 @@ from app.schemas.auth import Token, TokenData, UserCreate, UserResponse
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/token")
+oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl="/auth/token", auto_error=False)
 
 
 # --- Helpers ---
@@ -102,6 +103,24 @@ async def get_current_user(
 
     if not user.is_active:
         raise HTTPException(status_code=403, detail="Inactive user")
+    return user
+
+
+# --- Optional current user dependency (for guest-allowed endpoints) ---
+async def get_optional_current_user(
+    token: Annotated[str | None, Depends(oauth2_scheme_optional)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> User | None:
+    if not token:
+        return None
+    payload = decode_and_verify_token(token)
+    if not payload or "sub" not in payload:
+        return None
+    username = payload["sub"]
+    result = await db.execute(select(User).where(User.username == username))
+    user = result.scalars().first()
+    if not user or not user.is_active:
+        return None
     return user
 
 

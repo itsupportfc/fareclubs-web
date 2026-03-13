@@ -1,18 +1,88 @@
-import hashlib
+import logging
+import logging.config
 from contextlib import asynccontextmanager
-from email import message
-from typing import List
+from pathlib import Path
 
 from app.api.v1 import airports, auth, flight
 from app.clients.exceptions import ExternalProviderError
-from app.db.database import close_db, get_db, init_db
-from app.utils.cache import FlightCache, get_flight_cache
-from fastapi import Depends, FastAPI, HTTPException, status
+from app.config import settings
+from app.utils.cache import FlightCache, flight_cache, get_flight_cache
+from fastapi import Depends, FastAPI, status
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.middleware.cors import CORSMiddleware
+
+backend_root = Path(__file__).resolve().parents[1]
+if backend_root.name.lower() == "backend":
+    default_logs_dir = backend_root.parent / "logs"
+else:
+    default_logs_dir = backend_root / "logs"
+logs_dir = (
+    Path(settings.BACKEND_LOG_DIR) if settings.BACKEND_LOG_DIR else default_logs_dir
+)
+log_file = (
+    Path(settings.BACKEND_LOG_FILE)
+    if settings.BACKEND_LOG_FILE
+    else logs_dir / "backend.log"
+)
+log_file.parent.mkdir(parents=True, exist_ok=True)
+
+LOGGING_CONFIG = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "standard": {
+            "format": "%(asctime)s %(name)s %(levelname)s %(message)s",
+        }
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "level": "INFO",
+            "formatter": "standard",
+            "stream": "ext://sys.stdout",
+        },
+        "file": {
+            "class": "logging.FileHandler",
+            "level": "INFO",
+            "formatter": "standard",
+            "filename": str(log_file),
+            "mode": "a",
+        },
+    },
+    "root": {
+        "level": "INFO",
+        "handlers": ["console", "file"],
+    },
+    "loggers": {
+        "uvicorn": {
+            "level": "INFO",
+            "handlers": ["console", "file"],
+            "propagate": False,
+        },
+        "uvicorn.error": {
+            "level": "INFO",
+            "handlers": ["console", "file"],
+            "propagate": False,
+        },
+        "uvicorn.access": {
+            "level": "INFO",
+            "handlers": ["console", "file"],
+            "propagate": False,
+        },
+    },
+}
+
+logging.config.dictConfig(LOGGING_CONFIG)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: Redis connects lazily on first use
+    yield
+    # Shutdown: close Redis connection pool
+    await flight_cache.close()
+
 
 app = FastAPI(
     title="Flight Backend API",
@@ -20,19 +90,19 @@ app = FastAPI(
     docs_url="/api/v1/docs",
     openapi_url="/api/v1/openapi.json",
     redoc_url="/api/v1/redoc",
+    lifespan=lifespan,
 )
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Or specify your frontend URL
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 
-# global exception handler for ExternalProviderError
 @app.exception_handler(ExternalProviderError)
 async def external_provider_exception_handler(request, exc: ExternalProviderError):
     return JSONResponse(
@@ -52,10 +122,12 @@ app.include_router(airports.router, prefix="/api/v1")
 
 @app.get("/dev/cache-inspect")
 async def inspect_cache(cache: FlightCache = Depends(get_flight_cache)):
-    # Note: We return the raw _storage dictionary
-    # We use a dict comprehension to make it readable
-    return {
-        "count": len(cache._storage),
-        "keys": list(cache._storage.keys()),
-        "data": cache._storage,
-    }
+    try:
+        keys = await cache._redis.keys("*")
+        data = {}
+        for k in keys:
+            raw = await cache._redis.get(k)
+            data[k] = raw[:200] if raw else None
+        return {"count": len(keys), "keys": keys, "data": data}
+    except Exception as e:
+        return {"error": str(e)}

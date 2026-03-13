@@ -7,6 +7,7 @@ from app.config import settings
 # IMport Base and all you models here
 from app.db.database import Base
 from app.db.models.air_data import Airline, Airport
+from app.db.models.booking import Booking, BookingPassenger, Payment
 from app.db.models.user import User
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection

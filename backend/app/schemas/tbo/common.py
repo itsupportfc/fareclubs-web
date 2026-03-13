@@ -123,6 +123,9 @@ class Segment(TBOBaseSchema):
     StopPointArrivalTime: datetime | None = None
     StopPointDepartureTime: datetime | None = None
 
+    # PNR
+    AirlinePNR: str | None = None
+
     # Nested models
     Airline: AirlineInfo
     Origin: OriginInfo
@@ -209,7 +212,7 @@ class FareRule(TBOBaseSchema):
     Airline: str
     FareBasisCode: str
     FareRuleDetail: str  # HTML content
-    FareRestriction: str
+    FareRestriction: str | None = None
     FareFamilyCode: str | None = None
     FareRuleIndex: str | None = None
 
@@ -276,7 +279,7 @@ class Meal(TBOBaseSchema):
     WayType: Annotated[int, Field(description="Segment = 1,FullJourney = 2")]
     Code: str
     Description: MealDescriptionEnum
-    AirlineDescription: str
+    AirlineDescription: str | None = None
     Quantity: int  # should be int
     Currency: str
     Price: float

@@ -16,4 +16,6 @@ COPY . .
 
 EXPOSE 8000
 
-CMD ["uvicorn","app.main:app","--host","0.0.0.0","--port","8000"]
+# Auto-run Alembic migrations before starting the server.
+# alembic upgrade head is idempotent — safe to run every deploy.
+CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
