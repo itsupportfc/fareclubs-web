@@ -188,3 +188,19 @@ export async function getSSRAPI(payload) {
     throw err;
   }
 }
+
+// ===============================
+// Download E-Ticket PDF
+// ===============================
+export async function downloadEticketAPI(bookingId, pnr) {
+  const response = await fetch(
+    `${API_BASE_URL}/flights/booking/${bookingId}/eticket?pnr=${encodeURIComponent(pnr)}`,
+  );
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err?.detail || "Failed to download e-ticket");
+  }
+
+  return response.blob();
+}

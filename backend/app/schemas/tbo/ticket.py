@@ -174,14 +174,14 @@ class SSRDetail(TBOBaseSchema):
 class SegmentAdditionalInfoModel(TBOBaseSchema):
     """Additional segment info in ticket"""
 
-    FareBasis: str
-    NVA: str  # Not valid after
-    NVB: str  # Not valid before
-    Baggage: str
+    FareBasis: str = ""
+    NVA: str = ""  # Not valid after
+    NVB: str = ""  # Not valid before
+    Baggage: str = ""
     Meal: str | None = None
     Seat: str | None = None
     SpecialService: str | None = None
-    CabinBaggage: str
+    CabinBaggage: str = ""
 
 
 class TicketDetails(TBOBaseSchema):
@@ -193,11 +193,11 @@ class TicketDetails(TBOBaseSchema):
     TicketNumber: str
     IssueDate: datetime
     ValidatingAirline: str
-    Remarks: str
-    ServiceFeeDisplayType: str
+    Remarks: str = ""
+    ServiceFeeDisplayType: str = ""
     Status: str
-    ConjunctionNumber: str
-    TicketType: str
+    ConjunctionNumber: str = ""
+    TicketType: str = ""
 
 
 class TicketPassengerResponse(TBOBaseSchema):

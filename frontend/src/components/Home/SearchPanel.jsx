@@ -40,7 +40,6 @@ function SearchPanel() {
 
   const totalPassengers = adults + children + infants;
 
-  /* 🔄 Auto Image Slider */
   useEffect(() => {
     const slider = setInterval(() => {
       setFade(false);
@@ -52,7 +51,6 @@ function SearchPanel() {
     return () => clearInterval(slider);
   }, []);
 
-  /* ❌ Close dropdown on outside click */
   useEffect(() => {
     const handler = (e) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
@@ -63,7 +61,6 @@ function SearchPanel() {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  /* 🔍 Search Handler */
   const handleSearch = async (e) => {
     e.preventDefault();
 
@@ -101,7 +98,7 @@ function SearchPanel() {
     <div className="relative ml-10 mt-22 flex flex-col lg:flex-row items-center justify-center px-[28px] py-10">
 
       {/* LEFT FORM */}
-      <div className="bg-white shadow-2xl w-full lg:w-6/12 p-10">
+      <div className="bg-white shadow-xl rounded-2xl w-full lg:w-6/12 p-10">
         <form onSubmit={handleSearch} className="flex flex-col gap-5">
 
           {/* Trip Type */}
@@ -111,10 +108,10 @@ function SearchPanel() {
                 key={type}
                 type="button"
                 onClick={() => setTripType(type)}
-                className={`px-6 py-2 rounded-lg border ${
+                className={`px-6 py-2 rounded-lg border transition-colors duration-200 ${
                   tripType === type
                     ? "bg-[#ff214c] text-white"
-                    : "border-[#ff214c] text-[#ff214c]"
+                    : "border-[#ff214c] text-[#ff214c] hover:bg-red-50"
                 }`}
               >
                 {type === "oneway" ? "One Way" : "Round Trip"}
@@ -130,9 +127,19 @@ function SearchPanel() {
 
           {/* Dates */}
           <div className="grid md:grid-cols-2 gap-4">
-            <input type="date" value={departDate} onChange={(e) => setDepartDate(e.target.value)} className="p-3 border rounded-lg" />
+            <input
+              type="date"
+              value={departDate}
+              onChange={(e) => setDepartDate(e.target.value)}
+              className="p-3 border rounded-lg transition-all duration-200 focus:ring-2 focus:ring-pink-400 focus:border-pink-400 outline-none"
+            />
             {tripType === "roundtrip" && (
-              <input type="date" value={returnDate} onChange={(e) => setReturnDate(e.target.value)} className="p-3 border rounded-lg" />
+              <input
+                type="date"
+                value={returnDate}
+                onChange={(e) => setReturnDate(e.target.value)}
+                className="p-3 border rounded-lg transition-all duration-200 focus:ring-2 focus:ring-pink-400 focus:border-pink-400 outline-none"
+              />
             )}
           </div>
 
@@ -141,13 +148,13 @@ function SearchPanel() {
             <button
               type="button"
               onClick={() => setShowPassengerDropdown(!showPassengerDropdown)}
-              className="w-full p-3 border rounded-lg flex justify-between"
+              className="w-full p-3 border rounded-lg flex justify-between transition-all duration-200 hover:border-gray-400"
             >
               {`${totalPassengers} Passengers, ${travelClass}`} ▼
             </button>
 
             {showPassengerDropdown && (
-              <div className="absolute bottom-full mb-3 left-0 z-50 w-96 bg-white border rounded-xl shadow-xl p-6">
+              <div className="absolute bottom-full mb-3 left-0 z-50 w-96 bg-white border border-gray-100 rounded-xl shadow-xl p-6">
 
                 {[
                   { label: "Adults", value: adults, min: 1, key: "adults" },
@@ -157,9 +164,9 @@ function SearchPanel() {
                   <div key={key} className="flex justify-between items-center mb-4">
                     <span className="font-medium">{label}</span>
                     <div className="flex gap-4 items-center">
-                      <button type="button" onClick={() => value > min && useFlightStore.setState({ [key]: value - 1 })} className="px-3 py-1 border rounded">−</button>
+                      <button type="button" onClick={() => value > min && useFlightStore.setState({ [key]: value - 1 })} className="px-3 py-1 border rounded hover:bg-gray-100 transition-colors duration-200">−</button>
                       <span>{value}</span>
-                      <button type="button" onClick={() => useFlightStore.setState({ [key]: value + 1 })} className="px-3 py-1 border rounded">+</button>
+                      <button type="button" onClick={() => useFlightStore.setState({ [key]: value + 1 })} className="px-3 py-1 border rounded hover:bg-gray-100 transition-colors duration-200">+</button>
                     </div>
                   </div>
                 ))}
@@ -167,7 +174,7 @@ function SearchPanel() {
                 <select
                   value={travelClass}
                   onChange={(e) => useFlightStore.setState({ travelClass: e.target.value })}
-                  className="w-full border p-2 rounded mb-4"
+                  className="w-full border p-2 rounded mb-4 transition-all duration-200 focus:ring-2 focus:ring-pink-400 outline-none"
                 >
                   <option>Economy</option>
                   <option>Premium Economy</option>
@@ -178,7 +185,7 @@ function SearchPanel() {
                 <button
                   type="button"
                   onClick={() => setShowPassengerDropdown(false)}
-                  className="w-full bg-[#ff214c] text-white py-2 rounded-lg"
+                  className="w-full bg-[#ff214c] text-white py-2 rounded-lg hover:bg-[#e61a42] transition-colors duration-200"
                 >
                   Done
                 </button>
@@ -188,14 +195,14 @@ function SearchPanel() {
 
           {error && <div className="text-red-600">{error}</div>}
 
-          <button type="submit" className="bg-[#ff214c] text-white py-3 rounded-lg">
+          <button type="submit" className="bg-[#ff214c] text-white py-3 rounded-lg hover:bg-[#e61a42] transition-colors duration-200 font-semibold">
             {isLoading ? "Searching..." : "Search Flights"}
           </button>
         </form>
       </div>
 
       {/* RIGHT IMAGE */}
-      <div className="hidden lg:block lg:w-5/12 ml-10 shadow-2xl">
+      <div className="hidden lg:block lg:w-5/12 ml-10 rounded-2xl overflow-hidden shadow-xl">
         <img src={images[currentImage]} className={`transition-opacity duration-500 ${fade ? "opacity-100" : "opacity-0"}`} />
       </div>
     </div>

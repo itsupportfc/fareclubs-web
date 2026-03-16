@@ -32,7 +32,7 @@ export default function FareSummary({
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden sticky top-20">
             {/* Header */}
             <div className="bg-gradient-to-r from-[#FF2E57] to-[#0047FF] px-5 py-4">
-                <h3 className="text-white font-bold text-base flex items-center gap-2">
+                <h3 className="text-white font-display text-base flex items-center gap-2">
                     <CreditCard className="w-4 h-4" />
                     Fare Summary
                 </h3>
@@ -121,7 +121,7 @@ export default function FareSummary({
                 )}
 
                 {/* Coupon placeholder */}
-                <button className="flex items-center gap-2 text-sm text-[#0047FF] font-medium hover:underline w-full">
+                <button className="flex items-center gap-2 text-sm text-[#0047FF] font-medium hover:underline w-full transition-colors duration-200">
                     <Tag className="w-4 h-4" />
                     Apply Coupon Code
                 </button>
@@ -130,7 +130,7 @@ export default function FareSummary({
                 <div className="border-t border-dashed border-gray-200 pt-3">
                     <div className="flex justify-between items-center">
                         <span className="font-bold text-gray-900">Grand Total</span>
-                        <span className="text-xl font-extrabold bg-gradient-to-r from-[#FF2E57] to-[#FF6B35] bg-clip-text text-transparent">
+                        <span className="font-display text-xl font-extrabold bg-gradient-to-r from-[#FF2E57] to-[#FF6B35] bg-clip-text text-transparent">
                             ₹{currencyFmt(grandTotal)}
                         </span>
                     </div>

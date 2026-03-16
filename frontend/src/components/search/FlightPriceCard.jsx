@@ -1,5 +1,6 @@
 import React, { useMemo, useState, useEffect } from "react";
 import { Plane } from "lucide-react";
+import { motion } from "framer-motion";
 import useFlightStore from "../../store/useFlightStore";
 
 /* ---------- HELPERS ---------- */
@@ -78,7 +79,6 @@ export default function FlightPriceCard({ flight, onViewFares = () => {} }) {
   const isFareLoading = useFlightStore((s) => s.isFareLoading);
   const fareError = useFlightStore((s) => s.fareError);
 
-  // ✅ cache helpers
   const setSelectedFlight = useFlightStore((s) => s.setSelectedFlight);
 
   const fareRules = fareData[fareId]?.fareRules;
@@ -121,10 +121,7 @@ export default function FlightPriceCard({ flight, onViewFares = () => {} }) {
       stopsCount,
     };
 
-    // ✅ store in cache (FareModal only)
     setSelectedFlight(itineraryPayload);
-
-    // ✅ send to FareModal
     onViewFares(itineraryPayload);
   };
 
@@ -132,7 +129,12 @@ export default function FlightPriceCard({ flight, onViewFares = () => {} }) {
      RENDER
      =============================== */
   return (
-    <div className="bg-white border rounded-xl shadow-sm hover:shadow-md transition my-3">
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3 }}
+      className="bg-white border border-gray-100 rounded-xl shadow-sm hover:shadow-lg transition-all duration-300 my-3"
+    >
       {/* MAIN ROW */}
       <div className="flex flex-col md:flex-row items-center justify-between px-4 py-4 gap-4">
         {/* AIRLINE */}
@@ -170,7 +172,7 @@ export default function FlightPriceCard({ flight, onViewFares = () => {} }) {
             </p>
 
             {stopsCount > 0 && (
-              <div className="absolute top-full mt-2 hidden group-hover:block bg-white border shadow-lg rounded-md p-3 text-xs z-10 w-56">
+              <div className="absolute top-full mt-2 hidden group-hover:block bg-white border border-gray-100 shadow-xl rounded-xl p-3 text-xs z-10 w-56">
                 {layovers.map((l, i) => (
                   <p key={i}>
                     Layover at <strong>{l.airport}</strong> • {l.duration}
@@ -190,14 +192,14 @@ export default function FlightPriceCard({ flight, onViewFares = () => {} }) {
 
         {/* PRICE */}
         <div className="text-right min-w-[180px]">
-          <p className="text-xl font-bold text-pink-600">
+          <p className="font-display text-xl font-bold text-pink-600">
             ₹{lowestFare.totalPrice.toLocaleString("en-IN")}
           </p>
-          <p className="text-xs text-gray-500">lowest price</p>
+          <p className="text-xs uppercase tracking-wide text-gray-400">lowest price</p>
 
           <button
             onClick={handleViewFares}
-            className="mt-2 bg-pink-600 text-white px-4 py-2 rounded-md w-full"
+            className="mt-2 bg-pink-600 text-white px-4 py-2 rounded-md w-full hover:bg-pink-700 transition-colors duration-200"
           >
             VIEW FARES
           </button>
@@ -208,7 +210,7 @@ export default function FlightPriceCard({ flight, onViewFares = () => {} }) {
       <div className="flex justify-end px-4 pb-4">
         <button
           onClick={() => setDetailsOpen(!detailsOpen)}
-          className="text-blue-600 text-sm font-semibold"
+          className="text-blue-600 text-sm font-semibold hover:text-blue-700 transition-colors duration-200"
         >
           {detailsOpen ? "HIDE DETAILS" : "VIEW DETAILS"}
         </button>
@@ -223,7 +225,7 @@ export default function FlightPriceCard({ flight, onViewFares = () => {} }) {
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                className={`px-4 py-3 text-sm font-semibold ${
+                className={`px-4 py-3 text-sm font-semibold transition-colors duration-200 ${
                   activeTab === tab
                     ? "text-blue-600 border-b-2 border-blue-600"
                     : "text-gray-500"
@@ -249,7 +251,7 @@ export default function FlightPriceCard({ flight, onViewFares = () => {} }) {
 
                 return (
                   <div key={idx}>
-                    <div className="bg-white border rounded-lg p-3 flex gap-4">
+                    <div className="bg-white border border-gray-100 rounded-xl p-3 flex gap-4">
                       <div className="min-w-[160px]">
                         <p className="font-semibold">
                           {seg.carrier.name}
@@ -335,7 +337,7 @@ export default function FlightPriceCard({ flight, onViewFares = () => {} }) {
                   {fareRules.map((rule, i) => (
                     <div
                       key={i}
-                      className="border p-3 rounded-md mb-2"
+                      className="border border-gray-100 p-3 rounded-xl mb-2"
                     >
                       <p className="font-medium">
                         {rule.Fareruledetail || "Rule"}
@@ -391,6 +393,6 @@ export default function FlightPriceCard({ flight, onViewFares = () => {} }) {
           )}
         </div>
       )}
-    </div>
+    </motion.div>
   );
 }

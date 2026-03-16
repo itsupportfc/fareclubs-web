@@ -1,14 +1,6 @@
-/**
- * Smart Flight Loader 🏃 — Human Runner Edition
- *
- * - Running person glides horizontally *above* the progress bar
- * - Progress bar fills smoothly
- * - Subtle running/bobbing animation
- * - Dynamic text feedback
- */
-
 import { useEffect, useState } from "react";
-import { PersonStanding } from "lucide-react";
+import { Plane } from "lucide-react";
+import { motion } from "framer-motion";
 import Navbar from "../Home/Navbar";
 import "./LoaderOverlay.css";
 
@@ -39,7 +31,7 @@ function LoaderOverlay() {
       <div className="flex flex-col items-center justify-center flex-grow py-24">
         <div className="relative w-80">
 
-          {/* Running human above progress bar */}
+          {/* Plane icon gliding above progress bar */}
           <div
             className="absolute -top-12 transition-transform duration-300 ease-linear"
             style={{
@@ -48,13 +40,16 @@ function LoaderOverlay() {
             }}
           >
             <div className="relative flex items-center">
-              <div className="animate-runner-bounce">
-                <PersonStanding
+              <motion.div
+                animate={{ y: [0, -4, 0] }}
+                transition={{ duration: 1.2, repeat: Infinity, ease: "easeInOut" }}
+              >
+                <Plane
                   size={42}
                   strokeWidth={2.4}
                   className="text-orange-500 drop-shadow-md"
                 />
-              </div>
+              </motion.div>
             </div>
           </div>
 
@@ -68,17 +63,27 @@ function LoaderOverlay() {
         </div>
 
         {/* Text */}
-        <div className="mt-12 text-center text-gray-800">
-          <h2 className="text-lg md:text-xl font-semibold mb-1">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.2 }}
+          className="mt-12 text-center text-gray-800"
+        >
+          <h2 className="font-display text-lg md:text-xl mb-1">
             {progress < 90
               ? "Hang tight! We're fetching the best flights..."
-              : "Almost there! Getting your perfect matches 🏃‍♂️"}
+              : "Almost there! Getting your perfect matches"}
           </h2>
 
-          <p className="text-sm text-gray-600">
+          <motion.p
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: 0.5 }}
+            className="text-sm text-gray-600"
+          >
             Please wait while we prepare your options
-          </p>
-        </div>
+          </motion.p>
+        </motion.div>
       </div>
     </div>
   );

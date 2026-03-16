@@ -122,6 +122,44 @@ class BookingConfirmRequest(InternalBaseSchema):
     razorpay_signature: str
 
 
+class ConfirmPassengerInfo(InternalBaseSchema):
+    """Passenger info returned in booking confirmation."""
+
+    title: str
+    first_name: str
+    last_name: str
+    pax_type: int  # 1=Adult, 2=Child, 3=Infant
+    ticket_number: str | None = None
+    email: str | None = None
+    contact_no: str | None = None
+
+
+class SegmentBaggageInfo(InternalBaseSchema):
+    """Per-segment baggage info from ticket response."""
+
+    fare_basis: str | None = None
+    baggage: str | None = None  # "15 KG"
+    cabin_baggage: str | None = None  # "7 KG"
+
+
+class FareBreakdownInfo(InternalBaseSchema):
+    """Overall fare breakdown for the booking."""
+
+    currency: str = "INR"
+    base_fare: float
+    tax: float
+    total_fare: float
+    tax_breakup: list[dict] | None = None  # [{key, value}]
+
+
+class MiniFareRuleInfo(InternalBaseSchema):
+    """Mini fare rule (cancellation/reissue policy)."""
+
+    journey_points: str
+    type: str  # "Cancellation" | "Reissue"
+    details: str | None = None
+
+
 class BookingConfirmResponse(InternalBaseSchema):
     pnr: str
     booking_id: int
@@ -135,9 +173,15 @@ class BookingConfirmResponse(InternalBaseSchema):
     booking_id_inbound: int | None = None
     is_price_changed: bool = False
     is_time_changed: bool = False
-    status: Literal["confirmed", "pending"] = "confirmed"
+    status: Literal["confirmed", "pending", "partial"] = "confirmed"
+    inbound_status: Literal["confirmed", "failed", "pending"] | None = None
+    inbound_error_message: str | None = None
     support_phone: str | None = None
     support_email: str | None = None
     error_message: str | None = None
     razorpay_payment_id: str | None = None
     razorpay_order_id: str | None = None
+    passengers: list[ConfirmPassengerInfo] | None = None
+    segment_baggage: list[SegmentBaggageInfo] | None = None
+    fare_breakdown: FareBreakdownInfo | None = None
+    mini_fare_rules: list[MiniFareRuleInfo] | None = None

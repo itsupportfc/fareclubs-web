@@ -5,6 +5,7 @@ from decimal import Decimal
 from app.db.models.booking import Booking, BookingPassenger, Payment
 from app.schemas.tbo.booking_details import TBOGetBookingDetailsResponse
 from app.schemas.tbo.ticket import TBOTicketResponse
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
@@ -223,6 +224,34 @@ class BookingService:
             booking.pnr,
         )
         return booking
+
+    async def get_booking_by_id(
+        self,
+        booking_id: int,
+        user_id: int,
+    ) -> Booking | None:
+        """Fetch a booking by ID for the given user."""
+        result = await self.db.execute(
+            select(Booking).where(
+                Booking.id == booking_id,
+                Booking.user_id == user_id,
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def get_booking_by_id_and_pnr(
+        self,
+        booking_id: int,
+        pnr: str,
+    ) -> Booking | None:
+        """Fetch a booking by ID and PNR (for unauthenticated e-ticket download)."""
+        result = await self.db.execute(
+            select(Booking).where(
+                Booking.id == booking_id,
+                Booking.pnr == pnr,
+            )
+        )
+        return result.scalar_one_or_none()
 
     async def save_failed_booking(
         self,

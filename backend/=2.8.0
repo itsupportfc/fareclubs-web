@@ -1,0 +1,20 @@
+Collecting fpdf2
+  Downloading fpdf2-2.8.7-py3-none-any.whl.metadata (81 kB)
+Collecting defusedxml (from fpdf2)
+  Using cached defusedxml-0.7.1-py2.py3-none-any.whl.metadata (32 kB)
+Collecting Pillow!=9.2.*,>=8.3.2 (from fpdf2)
+  Downloading pillow-12.1.1-cp313-cp313-win_amd64.whl.metadata (9.0 kB)
+Collecting fonttools>=4.34.0 (from fpdf2)
+  Downloading fonttools-4.62.1-cp313-cp313-win_amd64.whl.metadata (119 kB)
+Downloading fpdf2-2.8.7-py3-none-any.whl (327 kB)
+Downloading fonttools-4.62.1-cp313-cp313-win_amd64.whl (2.3 MB)
+   ---------------------------------------- 2.3/2.3 MB 2.7 MB/s  0:00:00
+Downloading pillow-12.1.1-cp313-cp313-win_amd64.whl (7.0 MB)
+   ---------------------------------------- 7.0/7.0 MB 3.6 MB/s  0:00:01
+Using cached defusedxml-0.7.1-py2.py3-none-any.whl (25 kB)
+Installing collected packages: Pillow, fonttools, defusedxml, fpdf2
+
+Successfully installed Pillow-12.1.1 defusedxml-0.7.1 fonttools-4.62.1 fpdf2-2.8.7
+
+[notice] A new release of pip is available: 25.2 -> 26.0.1
+[notice] To update, run: D:\CSE\Fareclubs\Projects\fareclubs-web\backend\.venv\Scripts\python.exe -m pip install --upgrade pip

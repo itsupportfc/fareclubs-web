@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { motion, AnimatePresence } from "framer-motion";
 import useFlightStore from "../store/useFlightStore";
 import Navbar from "../components/Home/Navbar";
 import SmallSearch from "../components/search/SmallSearch";
@@ -49,14 +50,12 @@ export default function ReturnResultsPage() {
 
   const farePassengers = adults + children;
 
-  // sync selected flights with store for persistence
   const [selectedOutbound, setSelectedOutboundState] = useState(getSelectedFlight()?.outbound || null);
   const [selectedInbound, setSelectedInboundState] = useState(getSelectedFlight()?.inbound || null);
   const [showFareModal, setShowFareModal] = useState(false);
   const [detailsFlight, setDetailsFlight] = useState(null);
   const [detailsTab, setDetailsTab] = useState("itinerary");
 
-  // persist selections in store cache
   const setSelectedOutbound = (flight) => {
     setSelectedOutboundState(flight);
     setSelectedFlight({ outbound: flight, inbound: selectedInbound });
@@ -83,7 +82,7 @@ export default function ReturnResultsPage() {
       <div className="bg-gradient-to-r from-[#FF2E57] to-[#0047FF] text-white">
         <div className="max-w-7xl mx-auto px-4 py-5">
           <SmallSearch />
-          <h1 className="text-2xl font-bold mt-2">Round-trip Flights</h1>
+          <h1 className="font-display text-2xl mt-2">Round-trip Flights</h1>
         </div>
       </div>
 
@@ -140,7 +139,7 @@ export default function ReturnResultsPage() {
 
             <div className="flex items-center gap-6">
               <div className="text-right">
-                <div className="text-2xl font-bold">
+                <div className="font-display text-2xl font-bold">
                   ₹{totalPrice.toLocaleString("en-IN")}
                 </div>
                 <div className="text-sm text-gray-300">
@@ -149,12 +148,11 @@ export default function ReturnResultsPage() {
                 </div>
               </div>
 
-              {/* Disable BOOK NOW if seats not assigned for all passengers */}
               <button
                 onClick={() => setShowFareModal(true)}
-                className={`px-8 py-3 rounded-full font-semibold ${
+                className={`px-8 py-3 rounded-full font-semibold transition-colors duration-200 ${
                   selectedOutbound && selectedInbound
-                    ? "bg-blue-500"
+                    ? "bg-blue-500 hover:bg-blue-600"
                     : "bg-gray-400 cursor-not-allowed"
                 }`}
                 disabled={!selectedOutbound || !selectedInbound}
@@ -196,17 +194,26 @@ export default function ReturnResultsPage() {
 function FlightColumn({ title, flights, selected, onSelect, onDetails, farePassengers }) {
   return (
     <div>
-      <h2 className="text-xl font-semibold mb-4">{title}</h2>
-      {flights.map(f => (
-        <FlightCard
-          key={f.groupId}
-          flight={f}
-          isSelected={selected?.groupId === f.groupId}
-          onSelect={onSelect}
-          onShowDetails={onDetails}
-          farePassengers={farePassengers}
-        />
-      ))}
+      <h2 className="font-display text-xl mb-4">{title}</h2>
+      <motion.div
+        initial="hidden"
+        animate="visible"
+        variants={{
+          hidden: {},
+          visible: { transition: { staggerChildren: 0.06 } },
+        }}
+      >
+        {flights.map(f => (
+          <FlightCard
+            key={f.groupId}
+            flight={f}
+            isSelected={selected?.groupId === f.groupId}
+            onSelect={onSelect}
+            onShowDetails={onDetails}
+            farePassengers={farePassengers}
+          />
+        ))}
+      </motion.div>
     </div>
   );
 }
@@ -218,10 +225,15 @@ function FlightCard({ flight, isSelected, onSelect, onShowDetails, farePassenger
   const last = legs[legs.length - 1];
 
   return (
-    <div
+    <motion.div
+      variants={{
+        hidden: { opacity: 0, y: 12 },
+        visible: { opacity: 1, y: 0 },
+      }}
+      transition={{ duration: 0.3 }}
       onClick={() => onSelect(flight)}
-      className={`p-4 mb-4 rounded-xl border cursor-pointer ${
-        isSelected ? "border-blue-500 bg-blue-50" : "bg-white"
+      className={`p-4 mb-4 rounded-xl border cursor-pointer transition-all duration-200 ${
+        isSelected ? "border-blue-500 bg-blue-50 shadow-md" : "bg-white border-gray-100 hover:shadow-md"
       }`}
     >
       <div className="flex justify-between items-center">
@@ -244,7 +256,7 @@ function FlightCard({ flight, isSelected, onSelect, onShowDetails, farePassenger
           </div>
         </div>
 
-        <div className="font-bold">
+        <div className="font-display font-bold text-lg">
           ₹{(flight.lowestPrice * farePassengers).toLocaleString("en-IN")}
         </div>
       </div>
@@ -254,11 +266,11 @@ function FlightCard({ flight, isSelected, onSelect, onShowDetails, farePassenger
           e.stopPropagation();
           onShowDetails(flight);
         }}
-        className="text-blue-600 text-sm mt-2 underline"
+        className="text-blue-600 text-sm mt-2 underline hover:text-blue-700 transition-colors duration-200"
       >
         Flight Details
       </button>
-    </div>
+    </motion.div>
   );
 }
 
@@ -283,7 +295,7 @@ function FooterFlight({ title, flight, onShowDetails }) {
         </div>
         <button
           onClick={() => onShowDetails(flight)}
-          className="text-blue-400 text-sm underline"
+          className="text-blue-400 text-sm underline hover:text-blue-300 transition-colors duration-200"
         >
           Flight Details
         </button>
@@ -298,13 +310,27 @@ function FlightDetailsModal({ flight, tab, setTab, farePassengers, onClose }) {
   const legs = getLegs(flight);
 
   return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex justify-center items-center">
-      <div className="bg-white max-w-3xl w-full rounded-xl overflow-hidden">
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 bg-black/40 z-50 flex justify-center items-center"
+    >
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ type: "spring", stiffness: 300, damping: 25 }}
+        className="bg-white max-w-3xl w-full rounded-xl overflow-hidden"
+      >
         <div className="flex justify-between p-4 border-b">
-          <h2 className="font-bold">
+          <h2 className="font-display font-bold text-lg">
             {flight.origin} → {flight.destination}
           </h2>
-          <button onClick={onClose}>✕</button>
+          <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-full transition-colors duration-200">
+            <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
         </div>
 
         <div className="flex border-b">
@@ -312,7 +338,7 @@ function FlightDetailsModal({ flight, tab, setTab, farePassengers, onClose }) {
             <button
               key={t}
               onClick={() => setTab(t)}
-              className={`flex-1 py-3 font-semibold ${
+              className={`flex-1 py-3 font-semibold transition-colors duration-200 ${
                 tab === t ? "border-b-2 border-blue-600 text-blue-600" : ""
               }`}
             >
@@ -324,7 +350,7 @@ function FlightDetailsModal({ flight, tab, setTab, farePassengers, onClose }) {
         <div className="p-4 max-h-96 overflow-y-auto">
           {tab === "itinerary" &&
             legs.map((l, i) => (
-              <div key={i} className="border rounded-lg p-4 mb-3">
+              <div key={i} className="border border-gray-100 rounded-xl p-4 mb-3">
                 <div className="font-semibold">
                   {l.departure.city} → {l.arrival.city}
                 </div>
@@ -361,7 +387,7 @@ function FlightDetailsModal({ flight, tab, setTab, farePassengers, onClose }) {
             </p>
           )}
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }

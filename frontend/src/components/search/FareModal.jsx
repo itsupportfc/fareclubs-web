@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { X, Star, Plane } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { motion } from "framer-motion";
 import { getFareQuoteAPI } from "../api/flight";
 import { toast } from "sonner";
 import FareQuoteOverlay from "../common/FareQuoteOverlay";
@@ -14,8 +15,8 @@ export default function FareModal({
 
   const navigate = useNavigate();
   const [loadingFareId, setLoadingFareId] = useState(null);
-  const [priceChange, setPriceChange] = useState(null); // { fareId, oldPrice, newPrice, fare, quoteResponse }
-  const [timeChanged, setTimeChanged] = useState(null); // { fareId, fare, quoteResponse }
+  const [priceChange, setPriceChange] = useState(null);
+  const [timeChanged, setTimeChanged] = useState(null);
 
   const actualFlight = flight.flight || flight;
   const fares = actualFlight?.fares || flight?.fares || [];
@@ -92,7 +93,6 @@ export default function FareModal({
       const quoteResponse = await getFareQuoteAPI(payload);
       const newPrice = quoteResponse?.outbound?.newPrice ?? fare.totalPrice;
 
-      // Price change — show inline banner
       if (quoteResponse?.isPriceChanged && quoteResponse?.outbound) {
         setPriceChange({
           fareId: fareIdOutbound,
@@ -105,7 +105,6 @@ export default function FareModal({
         return;
       }
 
-      // Schedule change — show inline banner
       if (quoteResponse?.isTimeChangedOutbound) {
         setTimeChanged({ fareId: fareIdOutbound, fare, quoteResponse, newPrice });
         setLoadingFareId(null);
@@ -124,15 +123,20 @@ export default function FareModal({
   return (
     <div className="fixed inset-0 z-50 bg-black/60 flex justify-center items-center">
       <FareQuoteOverlay isVisible={!!loadingFareId} />
-      <div className="bg-white w-full max-w-6xl rounded-2xl shadow-2xl relative overflow-hidden">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ type: "spring", stiffness: 300, damping: 25 }}
+        className="bg-white w-full max-w-6xl rounded-2xl shadow-2xl relative overflow-hidden"
+      >
         {/* HEADER */}
         <div className="flex justify-between items-center px-6 py-4 border-b">
-          <h2 className="text-lg font-semibold">
+          <h2 className="font-display text-lg">
             Flight Details & Fare Options
           </h2>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-gray-200 rounded-full"
+            className="p-2 hover:bg-gray-200 rounded-full transition-colors duration-200"
           >
             <X className="w-5 h-5 text-gray-600" />
           </button>
@@ -140,7 +144,7 @@ export default function FareModal({
 
         {/* FLIGHT SUMMARY */}
         <div className="px-6 py-4 bg-gray-50 border-b flex flex-wrap items-center gap-4 text-sm text-gray-700">
-          <div className="flex items-center gap-2 font-semibold text-gray-900">
+          <div className="flex items-center gap-2 font-display font-semibold text-gray-900">
             {firstSegment?.origin}
             <Plane className="w-4 h-4" />
             {lastSegment?.destination}
@@ -184,7 +188,7 @@ export default function FareModal({
               <span className="text-gray-500 line-through">
                 ₹{priceChange.oldPrice.toLocaleString("en-IN")}
               </span>
-              <span className="text-lg font-bold text-amber-900">
+              <span className="font-display text-lg font-bold text-amber-900">
                 ₹{priceChange.newPrice.toLocaleString("en-IN")}
               </span>
             </div>
@@ -197,7 +201,7 @@ export default function FareModal({
                     priceChange.newPrice,
                   );
                 }}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700"
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition-colors duration-200"
               >
                 Continue with new price
               </button>
@@ -206,7 +210,7 @@ export default function FareModal({
                   setPriceChange(null);
                   onClose?.();
                 }}
-                className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100"
+                className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors duration-200"
               >
                 Cancel
               </button>
@@ -232,7 +236,7 @@ export default function FareModal({
                     timeChanged.newPrice,
                   );
                 }}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700"
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition-colors duration-200"
               >
                 Continue
               </button>
@@ -241,7 +245,7 @@ export default function FareModal({
                   setTimeChanged(null);
                   onClose?.();
                 }}
-                className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100"
+                className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors duration-200"
               >
                 Cancel
               </button>
@@ -256,12 +260,15 @@ export default function FareModal({
               const fareId = fare?.fareId || fare?.FareId;
 
               return (
-                <div
+                <motion.div
                   key={idx}
-                  className={`relative w-[300px] rounded-2xl border p-5 flex flex-col ${
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3, delay: idx * 0.08 }}
+                  className={`relative w-[300px] rounded-2xl border p-5 flex flex-col transition-all duration-200 hover:shadow-lg ${
                     fare.isRecommended
                       ? "border-blue-500 ring-1 ring-blue-500"
-                      : "border-gray-200"
+                      : "border-gray-200 hover:border-gray-300"
                   }`}
                 >
                   {fare.isRecommended && (
@@ -271,7 +278,7 @@ export default function FareModal({
                     </div>
                   )}
 
-                  <p className="text-2xl font-bold">
+                  <p className="font-display text-2xl font-bold">
                     ₹{fare.totalPrice.toLocaleString("en-IN")}
                   </p>
 
@@ -284,18 +291,18 @@ export default function FareModal({
                   <button
                     disabled={!!loadingFareId}
                     onClick={() => handleBookNow(fare)}
-                    className="mt-6 bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-xl font-semibold disabled:opacity-60"
+                    className="mt-6 bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-xl font-semibold disabled:opacity-60 transition-colors duration-200"
                   >
                     {loadingFareId === fareId
                       ? "CHECKING PRICE..."
                       : "BOOK NOW"}
                   </button>
-                </div>
+                </motion.div>
               );
             })}
           </div>
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 }

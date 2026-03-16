@@ -25,9 +25,16 @@
     100% { transform: translateX(100%); }
   }
 
+  @keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+
   --animate-plane-fly: plane-fly 3s ease-in-out infinite;
   --animate-progress: progress 1.5s ease-in-out infinite;
+  --animate-shimmer: shimmer 1.5s ease-in-out infinite;
 }
+
 @keyframes plane-glide {
   0% { transform: translateX(0) translateY(-50%); }
   50% { transform: translateX(100px) translateY(-60%); }
@@ -36,4 +43,10 @@
 
 .animate-plane-glide {
   animation: plane-glide 2s ease-in-out infinite alternate;
+}
+
+.shimmer-bg {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
 }

@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { motion } from "framer-motion";
 import Navbar from "../components/Home/Navbar";
 import { getSSRAPI } from "../components/api/flight";
 import { useRazorpayBooking } from "../components/api/useRazorpayBooking";
@@ -30,11 +31,19 @@ import FareSummary from "../components/booking/FareSummary";
 import SSRModal from "../components/booking/SSRModal";
 import BookingProcessingOverlay from "../components/common/BookingProcessingOverlay";
 
+const sectionVariants = {
+    hidden: { opacity: 0, y: 20 },
+    visible: (i) => ({
+        opacity: 1,
+        y: 0,
+        transition: { duration: 0.4, delay: i * 0.1 },
+    }),
+};
+
 export default function BookingPage() {
     const { state } = useLocation();
     const navigate = useNavigate();
 
-    // Normalize state from both FareModal (oneway) and ReturnFareModal (roundtrip)
     const {
         outboundFlight,
         returnFlight,
@@ -42,8 +51,6 @@ export default function BookingPage() {
         returnSelectedFare,
         passengers = { adults: 1, children: 0, infants: 0 },
         isInternationalReturn = false,
-        // OneWay sends perPassengerFares/fareQuoteFlags
-        // Roundtrip sends perPassengerFaresOutbound/Inbound, fareQuoteFlagsOutbound/Inbound
         perPassengerFares,
         fareQuoteFlags: fareQuoteFlagsOneway,
         perPassengerFaresOutbound,
@@ -54,11 +61,9 @@ export default function BookingPage() {
 
     const isRoundtrip = !!returnSelectedFare;
 
-    // Normalize per-passenger fares
     const perPaxOutbound = perPassengerFaresOutbound || perPassengerFares || [];
     const perPaxInbound = perPassengerFaresInbound || [];
 
-    // Merge fare quote flags
     const fareQuoteFlags =
         fareQuoteFlagsOneway ||
         fareQuoteFlagsOutbound ||
@@ -73,6 +78,7 @@ export default function BookingPage() {
     const [selectedBag, setSelectedBag] = useState({});
     const [bookingError, setBookingError] = useState(null);
     const [ssrLoading, setSsrLoading] = useState(false);
+
 
     const token = localStorage.getItem("access_token");
     const { initiateBooking, isProcessing, processingStep } =
@@ -141,8 +147,8 @@ export default function BookingPage() {
                 (t) =>
                     t.passportNo &&
                     t.passportExpiry &&
-                    t.passportIssueDate &&
-                    t.passportIssueCountryCode,
+                    (!fareQuoteFlags?.isPassportFullDetailRequired ||
+                        (t.passportIssueDate && t.passportIssueCountryCode)),
             );
         return basicOk && leadOk && panOk && passportOk;
     }, [travellers, fareQuoteFlags]);
@@ -336,10 +342,17 @@ export default function BookingPage() {
         }
         initiateBooking(
             payload,
-            (booking) =>
+            (booking) => {
+                try {
+                    sessionStorage.setItem(
+                        "fc_booking_confirmation",
+                        JSON.stringify({ booking, outboundFlight }),
+                    );
+                } catch {}
                 navigate("/booking/confirmation", {
                     state: { booking, outboundFlight },
-                }),
+                });
+            },
             (err) => setBookingError(err),
         );
     };
@@ -360,7 +373,12 @@ export default function BookingPage() {
                 {/* LEFT COLUMN (2/3) */}
                 <div className="lg:col-span-2 space-y-6">
                     {/* Section 1: Flight Details */}
-                    <div>
+                    <motion.div
+                        custom={0}
+                        initial="hidden"
+                        animate="visible"
+                        variants={sectionVariants}
+                    >
                         <SectionHeader
                             number={1}
                             icon={Plane}
@@ -381,10 +399,15 @@ export default function BookingPage() {
                                 />
                             )}
                         </div>
-                    </div>
+                    </motion.div>
 
                     {/* Section 2: Traveller Details */}
-                    <div>
+                    <motion.div
+                        custom={1}
+                        initial="hidden"
+                        animate="visible"
+                        variants={sectionVariants}
+                    >
                         <SectionHeader
                             number={2}
                             icon={Users}
@@ -396,10 +419,15 @@ export default function BookingPage() {
                             setTravellers={setTravellers}
                             fareQuoteFlags={fareQuoteFlags}
                         />
-                    </div>
+                    </motion.div>
 
                     {/* Section 3: Contact Details */}
-                    <div>
+                    <motion.div
+                        custom={2}
+                        initial="hidden"
+                        animate="visible"
+                        variants={sectionVariants}
+                    >
                         <SectionHeader
                             number={3}
                             icon={Phone}
@@ -410,10 +438,15 @@ export default function BookingPage() {
                             travellers={travellers}
                             setTravellers={setTravellers}
                         />
-                    </div>
+                    </motion.div>
 
                     {/* Section 4: Add-ons (SSR) */}
-                    <div>
+                    <motion.div
+                        custom={3}
+                        initial="hidden"
+                        animate="visible"
+                        variants={sectionVariants}
+                    >
                         <SectionHeader
                             number={4}
                             icon={ShoppingBag}
@@ -453,7 +486,7 @@ export default function BookingPage() {
                             <button
                                 disabled={!travellersComplete || ssrLoading}
                                 onClick={() => setShowSSR(true)}
-                                className={`w-full py-3 rounded-xl font-semibold text-sm transition flex items-center justify-center gap-2 ${
+                                className={`w-full py-3 rounded-xl font-semibold text-sm transition-all duration-200 flex items-center justify-center gap-2 ${
                                     travellersComplete
                                         ? "bg-gradient-to-r from-[#0047FF] to-[#0066FF] text-white hover:shadow-md"
                                         : "bg-gray-100 text-gray-400 cursor-not-allowed"
@@ -480,10 +513,15 @@ export default function BookingPage() {
                                 </p>
                             )}
                         </div>
-                    </div>
+                    </motion.div>
 
                     {/* Section 5: Important Info */}
-                    <div>
+                    <motion.div
+                        custom={4}
+                        initial="hidden"
+                        animate="visible"
+                        variants={sectionVariants}
+                    >
                         <SectionHeader
                             number={5}
                             icon={Info}
@@ -507,10 +545,15 @@ export default function BookingPage() {
                                 ))}
                             </ul>
                         </div>
-                    </div>
+                    </motion.div>
 
                     {/* Section 6: Payment */}
-                    <div>
+                    <motion.div
+                        custom={5}
+                        initial="hidden"
+                        animate="visible"
+                        variants={sectionVariants}
+                    >
                         <SectionHeader
                             number={6}
                             icon={CreditCard}
@@ -543,7 +586,7 @@ export default function BookingPage() {
                             <button
                                 disabled={!travellersComplete}
                                 onClick={handlePay}
-                                className={`w-full py-3.5 rounded-xl font-bold text-base transition flex items-center justify-center gap-2 ${
+                                className={`w-full py-3.5 rounded-xl font-bold text-base transition-all duration-200 flex items-center justify-center gap-2 ${
                                     travellersComplete
                                         ? "bg-gradient-to-r from-[#FF2E57] to-[#FF6B35] text-white hover:shadow-lg hover:shadow-[#FF2E57]/25 active:scale-[0.98]"
                                         : "bg-gray-200 text-gray-400 cursor-not-allowed"
@@ -572,7 +615,7 @@ export default function BookingPage() {
                                 </div>
                             )}
                         </div>
-                    </div>
+                    </motion.div>
                 </div>
 
                 {/* RIGHT COLUMN (1/3) — Fare Summary */}
@@ -592,7 +635,7 @@ export default function BookingPage() {
                 <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-gray-200 px-4 py-3 flex items-center justify-between shadow-[0_-4px_12px_rgba(0,0,0,0.08)]">
                     <div>
                         <p className="text-xs text-gray-500">Total Fare</p>
-                        <p className="text-lg font-extrabold bg-gradient-to-r from-[#FF2E57] to-[#FF6B35] bg-clip-text text-transparent">
+                        <p className="font-display text-lg font-extrabold bg-gradient-to-r from-[#FF2E57] to-[#FF6B35] bg-clip-text text-transparent">
                             ₹{currencyFmt(grandTotal)}
                         </p>
                     </div>

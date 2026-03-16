@@ -1,7 +1,7 @@
 import React from "react";
 
 const inputBase =
-    "w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm text-gray-800 bg-white transition-all outline-none focus:ring-2 focus:ring-[#0047FF]/30 focus:border-[#0047FF] placeholder:text-gray-400";
+    "w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm text-gray-800 bg-white transition-all duration-200 outline-none focus:ring-2 focus:ring-[#0047FF]/30 focus:border-[#0047FF] focus:shadow-sm placeholder:text-gray-400";
 
 const InputLabel = ({ label, required, children }) => (
     <label className="block">

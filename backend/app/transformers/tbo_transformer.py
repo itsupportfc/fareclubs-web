@@ -7,6 +7,10 @@ from app.clients.exceptions import ExternalProviderError
 from app.schemas.internal.booking import (
     BookingConfirmRequest,
     BookingConfirmResponse,
+    ConfirmPassengerInfo,
+    FareBreakdownInfo,
+    MiniFareRuleInfo,
+    SegmentBaggageInfo,
 )
 from app.schemas.internal.fare_quote import FareQuoteResponse
 from app.schemas.internal.fare_rule import FareRule, FareRulesResponse
@@ -673,6 +677,70 @@ class TBOTransformer:
             )
         itinerary = inner.FlightItinerary
 
+        # Build passenger info
+        passengers_info = []
+        for pax in itinerary.Passenger:
+            passengers_info.append(
+                ConfirmPassengerInfo(
+                    title=pax.Title,
+                    first_name=pax.FirstName,
+                    last_name=pax.LastName,
+                    pax_type=pax.PaxType,
+                    ticket_number=pax.Ticket.TicketNumber if pax.Ticket else None,
+                    email=pax.Email,
+                    contact_no=pax.ContactNo,
+                )
+            )
+
+        # Build segment baggage info from first passenger's SegmentAdditionalInfo
+        segment_baggage = []
+        first_pax = itinerary.Passenger[0] if itinerary.Passenger else None
+        if first_pax and first_pax.SegmentAdditionalInfo:
+            for seg_info in first_pax.SegmentAdditionalInfo:
+                segment_baggage.append(
+                    SegmentBaggageInfo(
+                        fare_basis=seg_info.FareBasis,
+                        baggage=seg_info.Baggage,
+                        cabin_baggage=seg_info.CabinBaggage,
+                    )
+                )
+
+        # Build fare breakdown
+        fare = itinerary.Fare
+        tax_breakup = None
+        if fare.TaxBreakup:
+            tax_breakup = [{"key": tb.key, "value": tb.value} for tb in fare.TaxBreakup]
+        fare_breakdown = FareBreakdownInfo(
+            currency=fare.Currency,
+            base_fare=fare.BaseFare,
+            tax=fare.Tax,
+            total_fare=fare.PublishedFare,
+            tax_breakup=tax_breakup,
+        )
+
+        # Build mini fare rules
+        mini_fare_rules = []
+        if itinerary.MiniFareRules:
+            for rule_list in itinerary.MiniFareRules:
+                if isinstance(rule_list, list):
+                    for rule in rule_list:
+                        if isinstance(rule, dict):
+                            mini_fare_rules.append(
+                                MiniFareRuleInfo(
+                                    journey_points=rule.get("JourneyPoints", ""),
+                                    type=rule.get("Type", ""),
+                                    details=rule.get("Details"),
+                                )
+                            )
+                elif isinstance(rule_list, dict):
+                    mini_fare_rules.append(
+                        MiniFareRuleInfo(
+                            journey_points=rule_list.get("JourneyPoints", ""),
+                            type=rule_list.get("Type", ""),
+                            details=rule_list.get("Details"),
+                        )
+                    )
+
         return BookingConfirmResponse(
             pnr=inner.PNR,
             booking_id=inner.BookingId,
@@ -684,6 +752,10 @@ class TBOTransformer:
             invoice_amount=itinerary.InvoiceAmount,
             is_price_changed=inner.IsPriceChanged,
             is_time_changed=inner.IsTimeChanged,
+            passengers=passengers_info or None,
+            segment_baggage=segment_baggage or None,
+            fare_breakdown=fare_breakdown,
+            mini_fare_rules=mini_fare_rules or None,
         )
 
     # ------------------------------------------------------------------
@@ -959,10 +1031,10 @@ class TBOTransformer:
                         arrival_time=seg.Destination.ArrTime,
                         carrier=Airline(
                             code=seg.Airline.AirlineCode,
-                            name=seg.Airline.AirlineName,
+                            name=seg.Airline.AirlineName or seg.Airline.AirlineCode,
                         ),
                         flight_number=seg.Airline.FlightNumber,
-                        operating_carrier=seg.Airline.AirlineName,
+                        operating_carrier=seg.Airline.AirlineName or seg.Airline.AirlineCode,
                         aircraft=seg.Craft or None,
                         duration_minutes=seg.Duration,
                         layover_minutes=seg.GroundTime,

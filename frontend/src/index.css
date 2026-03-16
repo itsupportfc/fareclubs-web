@@ -1,9 +1,9 @@
-/* Import Lato */
-@import url('https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700;900&display=swap');
+/* Import DM Sans + DM Serif Display */
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Serif+Display&display=swap');
 
 /* Root Defaults */
 :root {
-  font-family: 'Lato', sans-serif !important;
+  font-family: 'DM Sans', sans-serif !important;
   line-height: 1.5;
   font-weight: 400;
   -webkit-font-smoothing: antialiased;
@@ -13,22 +13,27 @@
 /* Reset */
 * {
   box-sizing: border-box;
-  font-family: 'Lato', sans-serif !important;
+  font-family: 'DM Sans', sans-serif !important;
 }
 
 html, body {
   margin: 0;
   padding: 0;
-  font-family: 'Lato', sans-serif !important;
+  font-family: 'DM Sans', sans-serif !important;
   background-color: #f8f9fb;
 }
 
 /* Remove default button styles */
 button {
-  font-family: 'Lato', sans-serif !important;
+  font-family: 'DM Sans', sans-serif !important;
 }
 
-/* Inputs, selects, textareas also use Lato */
+/* Inputs, selects, textareas also use DM Sans */
 input, select, textarea {
-  font-family: 'Lato', sans-serif !important;
+  font-family: 'DM Sans', sans-serif !important;
+}
+
+/* Display font utility */
+.font-display {
+  font-family: 'DM Serif Display', serif !important;
 }

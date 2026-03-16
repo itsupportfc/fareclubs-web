@@ -5,6 +5,7 @@ import {
     UtensilsCrossed,
     Luggage,
 } from "lucide-react";
+import { motion } from "framer-motion";
 import flightNose from "../../assets/flight-nose.png";
 import flightTail from "../../assets/Flight-tail.png";
 import {
@@ -22,7 +23,7 @@ const TripTabs = ({ active, setActive, hasInbound }) =>
                 <button
                     key={t}
                     onClick={() => setActive(t)}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200 ${
                         active === t
                             ? "bg-[#0047FF] text-white"
                             : "bg-gray-100 text-gray-600 hover:bg-gray-200"
@@ -41,7 +42,7 @@ const LegTabs = ({ segments, index, setIndex }) =>
                 <button
                     key={i}
                     onClick={() => setIndex(i)}
-                    className={`px-3 py-2 rounded-lg text-sm font-medium transition ${
+                    className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors duration-200 ${
                         index === i
                             ? "bg-[#0047FF] text-white"
                             : "bg-gray-100 text-gray-600 hover:bg-gray-200"
@@ -61,7 +62,7 @@ const PassengerSelector = ({ travellers, active, setActive }) => (
                     <button
                         key={i}
                         onClick={() => setActive(i)}
-                        className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
+                        className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors duration-200 ${
                             active === i
                                 ? "bg-[#0047FF] text-white"
                                 : "bg-gray-100 text-gray-600 hover:bg-gray-200"
@@ -134,7 +135,7 @@ const SeatsTab = ({ ssrData, travellers, selectedSeats, setSelectedSeats, hasInb
                                                 },
                                             }))
                                         }
-                                        className={`w-9 h-9 m-0.5 rounded text-xs font-medium transition ${
+                                        className={`w-9 h-9 m-0.5 rounded text-xs font-medium transition-all duration-200 ${
                                             isSelected
                                                 ? "bg-[#0047FF] text-white shadow-md"
                                                 : seat.status !== "available"
@@ -194,7 +195,7 @@ const MealsTab = ({ ssrData, travellers, selectedMeals, setSelectedMeals, hasInb
                                 },
                             }))
                         }
-                        className={`border rounded-xl p-4 text-left transition ${
+                        className={`border rounded-xl p-4 text-left transition-all duration-200 ${
                             selectedMeals[key]?.[activePax]?.code === m.code
                                 ? "bg-green-50 border-green-400 ring-2 ring-green-200"
                                 : "bg-white border-gray-200 hover:border-gray-300 hover:shadow-sm"
@@ -247,7 +248,7 @@ const BaggageTab = ({ ssrData, travellers, selectedBag, setSelectedBag, hasInbou
                                 },
                             }))
                         }
-                        className={`border rounded-xl px-5 py-4 text-center transition min-w-[120px] ${
+                        className={`border rounded-xl px-5 py-4 text-center transition-all duration-200 min-w-[120px] ${
                             selectedBag[key]?.[activePax]?.code === b.code
                                 ? "bg-green-50 border-green-400 ring-2 ring-green-200"
                                 : "bg-white border-gray-200 hover:border-gray-300 hover:shadow-sm"
@@ -285,15 +286,20 @@ export default function SSRModal({
 
     return (
         <div className="fixed inset-0 bg-black/60 z-50 flex justify-center items-start pt-10 overflow-y-auto">
-            <div className="bg-white w-full max-w-5xl rounded-2xl flex flex-col max-h-[90vh] mx-4">
+            <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ type: "spring", stiffness: 300, damping: 25 }}
+                className="bg-white w-full max-w-5xl rounded-2xl flex flex-col max-h-[90vh] mx-4"
+            >
                 {/* Header */}
                 <div className="flex items-center justify-between px-6 py-4 border-b shrink-0">
-                    <h2 className="text-lg font-bold text-gray-900">
+                    <h2 className="font-display text-lg text-gray-900">
                         Select Add-ons
                     </h2>
                     <button
                         onClick={onClose}
-                        className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 transition"
+                        className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors duration-200"
                         aria-label="Close modal"
                     >
                         <X className="w-5 h-5 text-gray-500" />
@@ -310,7 +316,7 @@ export default function SSRModal({
                         <button
                             key={t.key}
                             onClick={() => setActiveTab(t.key)}
-                            className={`pb-3 font-semibold text-sm flex items-center gap-1.5 transition ${
+                            className={`pb-3 font-semibold text-sm flex items-center gap-1.5 transition-colors duration-200 ${
                                 activeTab === t.key
                                     ? "border-b-2 border-[#0047FF] text-[#0047FF]"
                                     : "text-gray-400 hover:text-gray-600"
@@ -371,7 +377,7 @@ export default function SSRModal({
                             setSelectedBag({});
                             onClose();
                         }}
-                        className="px-5 py-2 rounded-xl border border-gray-300 text-gray-700 hover:bg-gray-100 text-sm font-medium transition"
+                        className="px-5 py-2 rounded-xl border border-gray-300 text-gray-700 hover:bg-gray-100 text-sm font-medium transition-colors duration-200"
                     >
                         Cancel
                     </button>
@@ -383,12 +389,12 @@ export default function SSRModal({
                     </p>
                     <button
                         onClick={onClose}
-                        className="px-5 py-2 rounded-xl bg-[#0047FF] text-white hover:bg-[#003ACC] text-sm font-semibold transition"
+                        className="px-5 py-2 rounded-xl bg-[#0047FF] text-white hover:bg-[#003ACC] text-sm font-semibold transition-colors duration-200"
                     >
                         Add to Booking
                     </button>
                 </div>
-            </div>
+            </motion.div>
         </div>
     );
 }

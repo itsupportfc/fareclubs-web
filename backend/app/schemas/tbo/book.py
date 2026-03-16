@@ -186,8 +186,8 @@ class FlightItineraryModel(TBOBaseSchema):
     FareRules: list[FareRule]
 
     LastTicketDate: Annotated[
-        datetime, Field(description="need to call /ticket method before this date.")
-    ]
+        datetime | None, Field(description="need to call /ticket method before this date.")
+    ] = None
     Status: int | None = None
 
 

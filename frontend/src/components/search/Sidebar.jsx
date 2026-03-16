@@ -33,8 +33,8 @@ const Sidebar = () => {
     const arrivalAirport = firstFlight?.Destination?.Airport?.AirportName || "";
 
     return (
-      <div className="bg-white shadow-md p-4 space-y-1 border border-gray-100 hover:shadow-lg transition-all duration-300">
-        <h3 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
+      <div className="bg-white shadow-md p-4 rounded-xl space-y-1 border border-gray-100 hover:shadow-lg transition-all duration-200">
+        <h3 className="font-display text-xl text-gray-900 flex items-center gap-2">
           <PlaneTakeoff size={20} className="text-orange-500" />
           {originCityName} → {destCityName}
         </h3>
@@ -48,29 +48,15 @@ const Sidebar = () => {
     );
   };
 
-  const NearbyAirportsCard = () => {
-    const nearbyAirports = useMemo(() => ["Airport A", "Airport B", "Airport C"], []);
-    return (
-      <div className="bg-white shadow-md p-4 border border-gray-100 hover:shadow-lg transition-all duration-300">
-        <h3 className="text-lg font-semibold mb-3 text-gray-900">Nearby Airports</h3>
-        <ul className="text-sm text-gray-700 space-y-1">
-          {nearbyAirports.map((airport, idx) => (
-            <li key={idx}>{airport}</li>
-          ))}
-        </ul>
-      </div>
-    );
-  };
-
   const FilterCard = () => {
     const handleCheckbox = (key) => setFilters({ ...filters, [key]: !filters[key] });
     return (
-      <div className="bg-white shadow-md p-4 border border-gray-100 hover:shadow-lg transition-all duration-300">
+      <div className="bg-white shadow-md p-4 rounded-xl border border-gray-100 hover:shadow-lg transition-all duration-200">
         <h3 className="text-lg font-semibold mb-3 text-gray-900 flex items-center gap-2">
           <Filter size={18} className="text-orange-500" /> Popular Filters
         </h3>
         <div className="space-y-3 text-sm text-gray-700">
-          <label className="flex items-center gap-2 cursor-pointer hover:text-orange-500 transition">
+          <label className="flex items-center gap-2 cursor-pointer hover:text-orange-500 transition-colors duration-200">
             <input
               type="checkbox"
               checked={!!filters.nonStop}
@@ -79,7 +65,7 @@ const Sidebar = () => {
             />
             Non Stop
           </label>
-          <label className="flex items-center gap-2 cursor-pointer hover:text-orange-500 transition">
+          <label className="flex items-center gap-2 cursor-pointer hover:text-orange-500 transition-colors duration-200">
             <input
               type="checkbox"
               checked={!!filters.oneStop}
@@ -109,7 +95,7 @@ const Sidebar = () => {
     };
 
     return (
-      <div className="bg-white shadow-md p-4 border border-gray-100 hover:shadow-lg transition-all duration-300">
+      <div className="bg-white shadow-md p-4 rounded-xl border border-gray-100 hover:shadow-lg transition-all duration-200">
         <h3 className="text-lg font-semibold mb-3 text-gray-900 flex items-center gap-2">
           <Clock size={18} className="text-orange-500" /> Departure Time
         </h3>
@@ -117,7 +103,7 @@ const Sidebar = () => {
           {timeSlots.map((slot) => (
             <label
               key={slot.key}
-              className="flex items-center justify-between text-sm cursor-pointer hover:text-orange-600 transition"
+              className="flex items-center justify-between text-sm cursor-pointer hover:text-orange-600 transition-colors duration-200"
             >
               <div className="flex items-center gap-2">
                 <input
@@ -139,7 +125,6 @@ const Sidebar = () => {
   };
 
   const AirlinesCard = () => {
-    // Sample working airlines
     const airlines = ["Air India", "IndiGo", "SpiceJet", "Vistara"];
 
     const handleCheckbox = (airline) => {
@@ -152,11 +137,11 @@ const Sidebar = () => {
     };
 
     return (
-      <div className="bg-white shadow-md p-4 border border-gray-100 hover:shadow-lg transition-all duration-300">
+      <div className="bg-white shadow-md p-4 rounded-xl border border-gray-100 hover:shadow-lg transition-all duration-200">
         <h3 className="text-lg font-semibold mb-3 text-gray-900">Airlines</h3>
         <div className="space-y-2 text-sm text-gray-700">
           {airlines.map((airline, idx) => (
-            <label key={idx} className="flex items-center gap-2 cursor-pointer hover:text-orange-500 transition">
+            <label key={idx} className="flex items-center gap-2 cursor-pointer hover:text-orange-500 transition-colors duration-200">
               <input
                 type="checkbox"
                 checked={filters.airlines?.includes(airline)}
@@ -177,7 +162,6 @@ const Sidebar = () => {
       <div className="relative">
         <aside className="hidden md:block col-span-1 space-y-4 sticky top-5">
           <RouteInfoCard />
-       
           <FilterCard />
           <TimeSlotCard />
           <AirlinesCard />
@@ -187,7 +171,7 @@ const Sidebar = () => {
       {showTop && (
         <button
           onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-          className="fixed bottom-5 right-5 bg-orange-500 text-white p-3 rounded-full shadow-lg hover:bg-orange-600 transition"
+          className="fixed bottom-5 right-5 bg-orange-500 text-white p-3 rounded-full shadow-lg hover:bg-orange-600 transition-colors duration-200"
         >
           <ArrowUp size={20} />
         </button>

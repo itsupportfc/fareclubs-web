@@ -27,22 +27,29 @@ export default function BookingProcessingOverlay({ isVisible, step = 0 }) {
                                 repeat: Infinity,
                                 ease: "easeInOut",
                             }}
-                            className="mb-8"
+                            className="mb-10"
                         >
-                            <Plane className="w-12 h-12 mx-auto" />
+                            <Plane className="w-14 h-14 mx-auto" />
                         </motion.div>
 
                         {/* Progress steps */}
-                        <div className="space-y-3 mb-8">
+                        <div className="space-y-4 mb-10">
                             {STEPS.map((label, i) => (
-                                <div
+                                <motion.div
                                     key={i}
-                                    className={`flex items-center gap-3 transition-opacity duration-300 ${
-                                        i <= step ? "opacity-100" : "opacity-30"
-                                    }`}
+                                    initial={{ opacity: 0, x: -10 }}
+                                    animate={{
+                                        opacity: i <= step ? 1 : 0.3,
+                                        x: 0,
+                                    }}
+                                    transition={{
+                                        duration: 0.4,
+                                        delay: i * 0.15,
+                                    }}
+                                    className="flex items-center gap-4"
                                 >
                                     <div
-                                        className={`w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                                        className={`w-8 h-8 rounded-full border-2 flex items-center justify-center shrink-0 transition-all duration-300 ${
                                             i < step
                                                 ? "bg-white border-white"
                                                 : i === step
@@ -52,7 +59,7 @@ export default function BookingProcessingOverlay({ isVisible, step = 0 }) {
                                     >
                                         {i < step ? (
                                             <svg
-                                                className="w-3.5 h-3.5 text-[#0047FF]"
+                                                className="w-4 h-4 text-[#0047FF]"
                                                 fill="none"
                                                 viewBox="0 0 24 24"
                                                 stroke="currentColor"
@@ -65,19 +72,24 @@ export default function BookingProcessingOverlay({ isVisible, step = 0 }) {
                                                 />
                                             </svg>
                                         ) : i === step ? (
-                                            <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
+                                            <div className="w-2.5 h-2.5 bg-white rounded-full animate-pulse" />
                                         ) : null}
                                     </div>
                                     <span className="text-sm font-medium">
                                         {label}
                                     </span>
-                                </div>
+                                </motion.div>
                             ))}
                         </div>
 
-                        <p className="text-white/70 text-sm">
+                        <motion.p
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            transition={{ delay: 0.5 }}
+                            className="text-white/70 text-sm"
+                        >
                             Please don't close this tab
-                        </p>
+                        </motion.p>
                     </div>
                 </motion.div>
             )}

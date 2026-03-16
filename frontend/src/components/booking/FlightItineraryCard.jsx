@@ -25,7 +25,7 @@ export default function FlightItineraryCard({ flight, selectedFare, title }) {
     return (
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
             {/* Airline header bar */}
-            <div className="flex items-center justify-between px-5 py-3 bg-gradient-to-r from-gray-50 to-white border-b border-gray-100">
+            <div className="flex items-center justify-between px-5 py-4 bg-gradient-to-r from-gray-50 to-white border-b border-gray-100">
                 <div className="flex items-center gap-3">
                     <img
                         src={getAirlineLogo(airlineCode)}

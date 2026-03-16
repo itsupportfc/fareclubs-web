@@ -63,4 +63,5 @@ websockets==15.0.1
 razorpay==1.4.1
 aiosmtplib==2.0.2
 redis==5.2.1
+fpdf2>=2.8.0
 setuptools<70

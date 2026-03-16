@@ -76,10 +76,10 @@ class AirlineInfo(TBOBaseSchema):
     """Airline and flight details"""
 
     AirlineCode: str
-    AirlineName: str
+    AirlineName: str = ""
     FlightNumber: str
-    FareClass: str
-    OperatingCarrier: str
+    FareClass: str = ""
+    OperatingCarrier: str = ""
 
 
 # ----------------------------------------------------------------------
@@ -115,9 +115,9 @@ class Segment(TBOBaseSchema):
     StopOver: bool | None = None
     Craft: str | None = None
     Remark: str | None = None
-    IsETicketEligible: bool
-    FlightStatus: Annotated[str, Field(description="e.g. Confirmed")]
-    Status: str
+    IsETicketEligible: bool = True
+    FlightStatus: Annotated[str, Field(description="e.g. Confirmed", default="")]
+    Status: str = ""
 
     # Stop point times (for stops)
     StopPointArrivalTime: datetime | None = None
@@ -146,28 +146,28 @@ class Fare(TBOBaseSchema):
 
     # Tax details
     TaxBreakup: list[KeyValue] | None = None
-    YQTax: float
+    YQTax: float = 0.0
 
     # Transaction fees
-    AdditionalTxnFeeOfrd: float
-    AdditionalTxnFeePub: float
+    AdditionalTxnFeeOfrd: float = 0.0
+    AdditionalTxnFeePub: float = 0.0
     PGCharge: float | None = None
-    OtherCharges: float
-    ChargeBU: list[KeyValue]
+    OtherCharges: float = 0.0
+    ChargeBU: list[KeyValue] = []
 
     # Pricing
-    Discount: Annotated[float, Field(description=" Will be zero for API customer.")]
+    Discount: Annotated[float, Field(description=" Will be zero for API customer.")] = 0.0
     PublishedFare: float
     OfferedFare: float
-    ServiceFee: float
+    ServiceFee: float = 0.0
 
     # Commission (sensitive - internal use only)
-    CommissionEarned: float
-    PLBEarned: float
-    IncentiveEarned: float
-    TdsOnCommission: float
-    TdsOnPLB: float
-    TdsOnIncentive: float
+    CommissionEarned: float = 0.0
+    PLBEarned: float = 0.0
+    IncentiveEarned: float = 0.0
+    TdsOnCommission: float = 0.0
+    TdsOnPLB: float = 0.0
+    TdsOnIncentive: float = 0.0
 
     # SSR charges
     TotalBaggageCharges: float | None = None
@@ -185,9 +185,9 @@ class FareBreakdown(TBOBaseSchema):
     BaseFare: float
     Tax: float
     TaxBreakUp: list[KeyValue] | None = None
-    YQTax: float
-    AdditionalTxnFeeOfrd: float
-    AdditionalTxnFeePub: float
+    YQTax: float = 0.0
+    AdditionalTxnFeeOfrd: float = 0.0
+    AdditionalTxnFeePub: float = 0.0
     PGCharge: float | None = None
     SupplierReissueCharges: float | None = None
 
@@ -210,8 +210,8 @@ class FareRule(TBOBaseSchema):
     Origin: str
     Destination: str
     Airline: str
-    FareBasisCode: str
-    FareRuleDetail: str  # HTML content
+    FareBasisCode: str = ""
+    FareRuleDetail: str = ""  # HTML content
     FareRestriction: str | None = None
     FareFamilyCode: str | None = None
     FareRuleIndex: str | None = None
@@ -300,7 +300,7 @@ class Seat(TBOBaseSchema):
     Code: str
     RowNo: str
     SeatNo: str | None = None
-    SeatType: SeatTypeEnum
+    SeatType: int
     SeatWayType: SeatWayTypeEnum
     Compartment: int
     Deck: int

@@ -31,9 +31,9 @@ export default function Cards() {
   return (
     <>
       <div className="text-center">
-        <h1 className="text-black-400 text-2xl">
+        <h1 className="font-display text-2xl text-black">
           Cheap Flight Tickets{" "}
-          <span className="text-gray-600 text-2xl">
+          <span className="text-gray-600">
             Prices are at FareClubs!
           </span>
         </h1>
@@ -42,7 +42,7 @@ export default function Cards() {
       {/* Wrapper to center the gray background div */}
       <div className="flex justify-center mt-5">
         <div className="bg-gray-200 inline-block rounded-lg w-full sm:w-4/5 lg:w-3/4 p-2 mx-auto">
-          <h2 className="mt-3 text-2xl text-left non-italic ml-2">
+          <h2 className="font-display text-xl mt-3 text-left ml-2">
             Promotional Offers
           </h2>
 
@@ -55,12 +55,12 @@ export default function Cards() {
             ].map((src, index) => (
               <div
                 key={index}
-                className="card bg-base-100 image-full w-full max-w-none shadow-xl hover:scale-105 transform transition duration-300 ease-in-out"
+                className="card bg-base-100 image-full w-full max-w-none shadow-xl hover:scale-[1.02] transform transition-all duration-300 ease-in-out rounded-xl overflow-hidden"
               >
                 <figure>
                   <img
                     src={src}
-                    className="w-full h-60 object-cover rounded-lg"
+                    className="w-full h-60 object-cover"
                     alt="Flight Destination"
                   />
                 </figure>
@@ -68,7 +68,7 @@ export default function Cards() {
             ))}
           </div>
 
-          <h2 className="mt-4 text-2xl text-left non-italic ml-2">
+          <h2 className="font-display text-xl mt-4 text-left ml-2">
             Holiday Packages
           </h2>
 
@@ -81,12 +81,12 @@ export default function Cards() {
             ].map((src, index) => (
               <div
                 key={index}
-                className="card bg-base-100 image-full w-full max-w-none shadow-xl hover:scale-105 transform transition duration-300 ease-in-out"
+                className="card bg-base-100 image-full w-full max-w-none shadow-xl hover:scale-[1.02] transform transition-all duration-300 ease-in-out rounded-xl overflow-hidden"
               >
                 <figure>
                   <img
                     src={src}
-                    className="w-full h-60 object-cover rounded-lg"
+                    className="w-full h-60 object-cover"
                     alt="Flight Destination"
                   />
                 </figure>
@@ -96,20 +96,20 @@ export default function Cards() {
         </div>
       </div>
 
-      <h1 className="text-black-400 text-2xl mt-5 text-center">
+      <h1 className="font-display text-2xl mt-5 text-center text-black">
         Cheap Flight Tickets{" "}
-        <span className="text-gray-600 text-2xl">
+        <span className="text-gray-600">
           Prices are at FareClubs!
         </span>
       </h1>
 
-      {/* ⬇️ Added Footer Info Section (nothing deleted) */}
+      {/* Footer Info Section */}
       <footer className="bg-gray-100 text-white py-12 px-6 mt-5 mr-15 ml-16">
         <div className="max-w-6xl cursor-pointer mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           {footerCards.map((card, index) => (
             <div
               key={index}
-              className="bg-white rounded-lg overflow-hidden shadow-lg flex flex-col transition-all hover:scale-105 hover:shadow-2xl hover:bg-gray-100"
+              className="bg-white rounded-xl overflow-hidden shadow-lg border border-gray-100 flex flex-col transition-all duration-300 hover:scale-[1.02] hover:shadow-xl"
             >
               {/* Image Section */}
               <div className="h-36">
@@ -122,7 +122,7 @@ export default function Cards() {
 
               {/* Text Section */}
               <div className="p-4 flex-1">
-                <h3 className="text-black text-xl font-semibold">
+                <h3 className="font-display text-lg text-black">
                   {card.title}
                 </h3>
                 <p className="text-gray-700 text-sm mt-2">

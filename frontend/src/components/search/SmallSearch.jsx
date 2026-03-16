@@ -61,7 +61,6 @@ const SmallSearch = () => {
     setDestination(temp);
   };
 
-  // ✅ Search handler using only searchFlights
   const handleSearch = async () => {
     if (!origin || !destination || !departDate) {
       toast.error("Please fill all required fields before searching.");
@@ -74,7 +73,7 @@ const SmallSearch = () => {
     }
 
     try {
-      const success = await searchFlights(); // Handles both outbound & inbound
+      const success = await searchFlights();
       if (!success) {
         toast.warning("No flights found.");
         return;
@@ -92,12 +91,12 @@ const SmallSearch = () => {
   };
 
   const boxClass =
-    "bg-white text-gray-900 text-sm px-3 rounded-md w-full sm:w-[160px] h-[40px] shadow-sm focus:ring-2 focus:ring-pink-400 outline-none transition flex items-center justify-between";
+    "bg-white text-gray-900 text-sm px-3 rounded-md w-full sm:w-[160px] h-[40px] shadow-sm outline-none transition-all duration-200 focus:ring-2 focus:ring-pink-400 focus:shadow-md flex items-center justify-between";
   const labelClass = "text-black text-xs font-medium mb-1";
 
   return (
     <div className="w-full bg-gradient-to-r p-4 rounded-lg shadow-lg">
-      <div className="flex flex-wrap lg:flex-nowrap items-center justify-center gap-3">
+      <div className="flex flex-wrap lg:flex-nowrap items-center justify-center gap-4">
         {/* Trip Type */}
         <div className="flex flex-col w-full sm:w-auto relative" id="trip-type-dropdown">
           <label className={labelClass}>TRIP TYPE</label>
@@ -109,7 +108,7 @@ const SmallSearch = () => {
             <ChevronDown size={16} />
           </button>
           {isTripDropdownOpen && (
-            <div className="absolute top-full mt-1 w-full sm:w-[160px] bg-white shadow-lg rounded-md z-50">
+            <div className="absolute top-full mt-1 w-full sm:w-[160px] bg-white shadow-lg rounded-md z-50 border border-gray-100">
               {["oneway", "roundtrip"].map((type) => (
                 <button
                   key={type}
@@ -117,7 +116,7 @@ const SmallSearch = () => {
                     setTripType(type);
                     setIsTripDropdownOpen(false);
                   }}
-                  className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-100 transition capitalize ${
+                  className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-100 transition-colors duration-200 capitalize ${
                     tripType === type ? "font-semibold text-pink-600" : "text-gray-900"
                   }`}
                 >
@@ -129,7 +128,7 @@ const SmallSearch = () => {
         </div>
 
         {/* From / Swap / To */}
-        <div className="flex flex-col sm:flex-row items-center gap-3 w-full">
+        <div className="flex flex-col sm:flex-row items-center gap-4 w-full">
           <div className="flex flex-col flex-1 min-w-[160px] w-full sm:w-auto">
             <label className={labelClass}>FROM</label>
             <AirportAutocomplete
@@ -144,7 +143,7 @@ const SmallSearch = () => {
 
           <div
             onClick={handleSwap}
-            className="hidden lg:flex items-center justify-center cursor-pointer hover:scale-110 transition h-[40px]"
+            className="hidden lg:flex items-center justify-center cursor-pointer hover:scale-110 transition-transform duration-200 h-[40px]"
           >
             <ArrowLeftRight size={22} className="text-gray-900" />
           </div>
@@ -199,7 +198,7 @@ const SmallSearch = () => {
           </button>
 
           {isPassengerOpen && (
-            <div className="absolute top-full mt-2 right-0 bg-white text-gray-900 shadow-lg rounded-xl p-4 w-72 z-50">
+            <div className="absolute top-full mt-2 right-0 bg-white text-gray-900 shadow-lg rounded-xl p-4 w-72 z-50 border border-gray-100">
               {[
                 { label: "Adults", value: adults, set: setAdults, min: 1 },
                 { label: "Children", value: children, set: setChildren, min: 0 },
@@ -211,14 +210,14 @@ const SmallSearch = () => {
                     <button
                       disabled={p.value <= p.min}
                       onClick={() => p.set(p.value - 1)}
-                      className="px-2 py-1 bg-gray-200 rounded hover:bg-pink-100 disabled:opacity-40"
+                      className="px-2 py-1 bg-gray-200 rounded hover:bg-pink-100 disabled:opacity-40 transition-colors duration-200"
                     >
                       -
                     </button>
                     <span>{p.value}</span>
                     <button
                       onClick={() => p.set(p.value + 1)}
-                      className="px-2 py-1 bg-gray-200 rounded hover:bg-pink-100"
+                      className="px-2 py-1 bg-gray-200 rounded hover:bg-pink-100 transition-colors duration-200"
                     >
                       +
                     </button>
@@ -232,7 +231,7 @@ const SmallSearch = () => {
                 <select
                   value={travelClass}
                   onChange={(e) => setTravelClass(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-pink-400 outline-none"
+                  className="w-full border border-gray-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-pink-400 outline-none transition-all duration-200"
                 >
                   <option value="Economy">Economy</option>
                   <option value="Premium Economy">Premium Economy</option>
@@ -254,7 +253,7 @@ const SmallSearch = () => {
               isLoading
                 ? "bg-pink-500 text-black cursor-not-allowed"
                 : "bg-pink-500 text-black hover:bg-pink-700"
-            } justify-center`}
+            } justify-center transition-colors duration-200`}
           >
             {isLoading ? "Searching..." : "SEARCH"}
           </button>

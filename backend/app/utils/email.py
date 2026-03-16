@@ -1,7 +1,8 @@
-"""Async email utilities for staff alert notifications."""
+"""Async email utilities for staff alert notifications and customer e-tickets."""
 
 import logging
 from datetime import datetime, timezone
+from email.mime.application import MIMEApplication
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
@@ -41,6 +42,56 @@ async def send_staff_alert_email(subject: str, html_body: str) -> None:
         logger.info("Staff alert email sent: %s", subject)
     except Exception:
         logger.exception("Failed to send staff alert email: %s", subject)
+
+
+async def send_customer_eticket_email(
+    to_email: str, passenger_name: str, pnr: str, pdf_bytes: bytes
+) -> None:
+    """Send e-ticket PDF to customer. Silently skips if SMTP is not configured."""
+    if not settings.SMTP_HOST or not to_email:
+        logger.debug("SMTP not configured or no email — skipping customer e-ticket email")
+        return
+
+    try:
+        msg = MIMEMultipart("mixed")
+        msg["Subject"] = f"Your FareClubs E-Ticket \u2014 PNR {pnr}"
+        msg["From"] = settings.SMTP_FROM_EMAIL or settings.SMTP_USERNAME
+        msg["To"] = to_email
+
+        html_body = f"""
+        <html><body style="font-family:sans-serif;font-size:14px;color:#333;">
+        <h2 style="color:#1e40af;">Your E-Ticket is Ready!</h2>
+        <p>Dear {passenger_name},</p>
+        <p>Thank you for booking with <strong>FareClubs</strong>. Your flight has been confirmed.</p>
+        <table style="border-collapse:collapse;" cellpadding="8">
+          <tr><td><strong>PNR</strong></td><td style="font-size:18px;font-weight:bold;color:#4f46e5;">{pnr}</td></tr>
+        </table>
+        <p>Please find your e-ticket attached as a PDF. Carry a valid photo ID to the airport.</p>
+        <p style="margin-top:24px;color:#999;font-size:12px;">
+          For support, contact support@fareclubs.com<br/>
+          This is an automated email. Please do not reply.
+        </p>
+        </body></html>
+        """
+        msg.attach(MIMEText(html_body, "html"))
+
+        pdf_attachment = MIMEApplication(pdf_bytes, _subtype="pdf")
+        pdf_attachment.add_header(
+            "Content-Disposition", "attachment", filename=f"FareClubs_ETicket_{pnr}.pdf"
+        )
+        msg.attach(pdf_attachment)
+
+        await aiosmtplib.send(
+            msg,
+            hostname=settings.SMTP_HOST,
+            port=settings.SMTP_PORT,
+            username=settings.SMTP_USERNAME or None,
+            password=settings.SMTP_PASSWORD or None,
+            start_tls=True,
+        )
+        logger.info("Customer e-ticket email sent to %s for PNR %s", to_email, pnr)
+    except Exception:
+        logger.exception("Failed to send customer e-ticket email to %s", to_email)
 
 
 def build_booking_failure_email(

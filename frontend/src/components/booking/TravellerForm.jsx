@@ -1,7 +1,8 @@
 import React from "react";
+import { motion } from "framer-motion";
 
 const inputBase =
-    "w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm text-gray-800 bg-white transition-all outline-none focus:ring-2 focus:ring-[#0047FF]/30 focus:border-[#0047FF] placeholder:text-gray-400";
+    "w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm text-gray-800 bg-white transition-all duration-200 outline-none focus:ring-2 focus:ring-[#0047FF]/30 focus:border-[#0047FF] focus:shadow-sm placeholder:text-gray-400";
 
 const InputLabel = ({ label, required, children }) => (
     <label className="block">
@@ -29,8 +30,11 @@ export default function TravellerForm({ travellers, setTravellers, fareQuoteFlag
     return (
         <div className="space-y-5">
             {travellers.map((t, i) => (
-                <div
+                <motion.div
                     key={i}
+                    initial={{ opacity: 0, y: 16 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3, delay: i * 0.08 }}
                     className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5"
                 >
                     <div className="flex items-center gap-2 mb-4">
@@ -237,7 +241,7 @@ export default function TravellerForm({ travellers, setTravellers, fareQuoteFlag
                             </div>
                         </div>
                     )}
-                </div>
+                </motion.div>
             ))}
         </div>
     );

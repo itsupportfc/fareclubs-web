@@ -1,10 +1,12 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Plane, Bed, Car, Bus, Menu, Sun } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import Farelogo from "../../assets/Farelogo.png";
 import WalletProfile from "../Home/WalletProfile";
 
 const Navbar = () => {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
   const dropdownRef = useRef(null);
   const menuRef = useRef(null);
 
@@ -25,6 +27,12 @@ const Navbar = () => {
     return () => document.removeEventListener("click", handleClickOutside);
   }, []);
 
+  useEffect(() => {
+    const handleScroll = () => setScrolled(window.scrollY > 10);
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
   const navItems = [
     { icon: Plane, text: "Flights", color: "text-red-500" },
     { icon: Bed, text: "Hotels", color: "text-yellow-500" },
@@ -33,8 +41,14 @@ const Navbar = () => {
   ];
 
   return (
-    <div className="fixed top-0 left-0 w-full z-50 bg-white shadow-sm border-b border-gray-200">
-      <div className="flex items-center justify-between px-4 sm:px-6 py-3">
+    <div
+      className={`fixed top-0 left-0 w-full z-50 border-b border-gray-200 transition-all duration-300 ${
+        scrolled
+          ? "bg-white/90 backdrop-blur-md shadow-md"
+          : "bg-white shadow-sm"
+      }`}
+    >
+      <div className="flex items-center justify-between px-4 sm:px-6 py-4">
         {/* Left Section */}
         <div className="flex items-center space-x-4">
           {/* Hamburger Icon (Visible on Mobile) */}
@@ -61,10 +75,10 @@ const Navbar = () => {
               <li key={index}>
                 <a
                   href="#"
-                  className="group flex items-center space-x-2 text-black border border-none rounded-full px-4 py-2 hover:bg-red-500 hover:text-white transition text-sm sm:text-base"
+                  className="group flex items-center space-x-2 text-black border border-none rounded-full px-4 py-2 hover:bg-red-500 hover:text-white transition-colors duration-200 text-sm sm:text-base"
                 >
                   <item.icon
-                    className={`w-5 h-5 ${item.color} group-hover:text-white`}
+                    className={`w-5 h-5 ${item.color} group-hover:text-white transition-colors duration-200`}
                   />
                   <span>{item.text}</span>
                 </a>
@@ -80,28 +94,34 @@ const Navbar = () => {
       </div>
 
       {/* Dropdown Menu for Small Screens */}
-      {isDropdownOpen && (
-        <div
-          ref={dropdownRef}
-          className="sm:hidden absolute top-full left-0 w-full bg-white shadow-md z-50 border-t border-gray-100"
-        >
-          <ul className="flex flex-col divide-y divide-gray-200">
-            {navItems.map((item, index) => (
-              <li key={index}>
-                <a
-                  href="#"
-                  className="flex items-center space-x-3 px-6 py-3 hover:bg-red-500 hover:text-white transition"
-                >
-                  <item.icon
-                    className={`w-5 h-5 ${item.color} group-hover:text-white`}
-                  />
-                  <span className="text-sm font-medium">{item.text}</span>
-                </a>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      <AnimatePresence>
+        {isDropdownOpen && (
+          <motion.div
+            ref={dropdownRef}
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.2 }}
+            className="sm:hidden absolute top-full left-0 w-full bg-white shadow-md z-50 border-t border-gray-100"
+          >
+            <ul className="flex flex-col divide-y divide-gray-200">
+              {navItems.map((item, index) => (
+                <li key={index}>
+                  <a
+                    href="#"
+                    className="flex items-center space-x-3 px-6 py-3 hover:bg-red-500 hover:text-white transition-colors duration-200"
+                  >
+                    <item.icon
+                      className={`w-5 h-5 ${item.color} group-hover:text-white`}
+                    />
+                    <span className="text-sm font-medium">{item.text}</span>
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

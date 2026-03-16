@@ -8,6 +8,8 @@ from typing import Optional
 import httpx
 from app.clients.exceptions import ExternalProviderError
 from app.config import settings
+from pydantic import ValidationError
+
 from app.schemas.tbo import (
     # Auth
     TBOAuthRequest,
@@ -37,8 +39,16 @@ from app.schemas.tbo import (
     TBOTicketNonLCCRequest,
     TBOTicketResponse,
 )
+from app.schemas.tbo.search import Itinerary
 
 logger = logging.getLogger(__name__)
+
+
+class TBOParseError(Exception):
+    """Raised when TBO response JSON is valid but doesn't match our schema."""
+    def __init__(self, message: str, raw_response: dict):
+        super().__init__(message)
+        self.raw_response = raw_response
 
 
 class TBOResponseStatus(IntEnum):
@@ -272,10 +282,49 @@ class TBOClient:
             data = resp.json()
             # logger.info("TBO Search response: %s", json.dumps(data, indent=2))
             self._check_response_status(data, context="TBO Search")
+        except ExternalProviderError:
+            raise
+        except Exception as e:
+            logger.exception("Failed to parse TBO search response JSON")
+            raise Exception("Unexpected response structure from TBO") from e
+
+        # Parse results individually — skip malformed itineraries instead of
+        # failing the entire search.
+        try:
+            raw_results = data.get("Response", {}).get("Results", [])
+            filtered_results: list[list[dict]] = []
+
+            for direction_idx, direction_list in enumerate(raw_results):
+                valid_items: list[dict] = []
+                for item_idx, item in enumerate(direction_list):
+                    try:
+                        Itinerary(**item)
+                        valid_items.append(item)
+                    except (ValidationError, Exception) as ve:
+                        logger.warning(
+                            "Skipping malformed result [%d][%d] (ResultIndex=%s): %s",
+                            direction_idx,
+                            item_idx,
+                            item.get("ResultIndex", "?"),
+                            ve,
+                        )
+                filtered_results.append(valid_items)
+
+            skipped = sum(
+                len(raw) - len(filt)
+                for raw, filt in zip(raw_results, filtered_results)
+            )
+            if skipped:
+                logger.warning(
+                    "TBO Search: skipped %d malformed results out of %d total",
+                    skipped,
+                    sum(len(d) for d in raw_results),
+                )
+
+            data["Response"]["Results"] = filtered_results
             parsed = TBOSearchResponse(**data)
             return parsed
         except ExternalProviderError:
-            # Bubble up provider errors so the API layer can decide how to respond
             raise
         except Exception as e:
             logger.exception("Failed to validate TBO search response")
@@ -397,10 +446,6 @@ class TBOClient:
             # logger.info("TBO SSR response: %s", json.dumps(data, indent=2))
             self._check_response_status(data, context="TBO SSR")
 
-            # dump data for debugging
-            with open("ssr.jsonc", "a", encoding="utf-8") as f:
-                json.dump(data, f, indent=2, ensure_ascii=False)
-
             parsed = TBOSSRResponse(**data)
             return parsed
         except Exception as e:
@@ -448,7 +493,7 @@ class TBOClient:
             raise
         except Exception as e:
             logger.exception("Failed to parse TBO Book response")
-            raise Exception("Unexpected response structure from TBO") from e
+            raise TBOParseError("Unexpected response structure from TBO", raw_response=data) from e
 
     async def generate_ticket_lcc(
         self, payload: TBOTicketLCCRequest
@@ -493,7 +538,7 @@ class TBOClient:
             raise
         except Exception as e:
             logger.exception("Failed to parse TBO TicketLCC response")
-            raise Exception("Unexpected response structure from TBO") from e
+            raise TBOParseError("Unexpected response structure from TBO", raw_response=data) from e
 
     async def generate_ticket_nonlcc(
         self, payload: TBOTicketNonLCCRequest
@@ -538,7 +583,7 @@ class TBOClient:
             raise
         except Exception as e:
             logger.exception("Failed to parse TBO TicketNonLCC response")
-            raise Exception("Unexpected response structure from TBO") from e
+            raise TBOParseError("Unexpected response structure from TBO", raw_response=data) from e
 
     async def get_booking_details_with_retry(
         self,
