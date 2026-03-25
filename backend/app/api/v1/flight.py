@@ -3,6 +3,7 @@ import logging
 import traceback
 from dataclasses import dataclass
 from enum import IntEnum
+from uuid import uuid4
 
 import httpx
 from app.api.v1.auth import get_current_user, get_optional_current_user
@@ -198,7 +199,12 @@ async def get_fare_quote(
     tasks.append(client.get_fare_quote(outbound_req))
 
     inbound_cached = None
-    if payload.trip_type == "roundtrip" and payload.fare_id_inbound:
+    # International return: one fareId covers both directions — skip inbound TBO call
+    if (
+        payload.trip_type == "roundtrip"
+        and payload.fare_id_inbound
+        and not payload.is_international_return
+    ):
         inbound_cached = await cache.get(payload.fare_id_inbound)
         if not inbound_cached:
             raise HTTPException(
@@ -242,7 +248,18 @@ async def get_fare_quote(
     flags_inbound = None
     is_time_changed_inbound = False
 
-    if inbound_tbo_response:
+    if payload.is_international_return:
+        # International return: single TBO fare covers both directions.
+        # Duplicate outbound data as inbound so frontend has per-pax fares
+        # for both directions (needed by SSR modal, booking page, etc.).
+        per_pax_inbound = per_pax_outbound
+        flags_inbound = flags_outbound
+        is_time_changed_inbound = (
+            getattr(outbound_tbo_response.Response, "IsTimeChanged", False) or False
+        )
+
+    elif inbound_tbo_response:
+        # Domestic return: separate inbound TBO response
         inbound_itinerary = inbound_tbo_response.Response.Results
         per_pax_inbound = _extract_per_passenger_fares(inbound_itinerary)
         flags_inbound = _extract_flags(inbound_itinerary)
@@ -381,7 +398,7 @@ async def get_ssr_details(
         )
 
         if payload.is_international_return:
-            if is_lcc_outbound:
+            if is_lcc_outbound:  # in this case inbound is also LCC, since it's the same fare with linked fares
                 outbound_view = transformer.transform_lcc_ssr_response(
                     baggage_options=outbound_ssr_response.Response.Baggage[0]
                     if outbound_ssr_response.Response.Baggage
@@ -528,7 +545,7 @@ async def create_booking_order(
             amount_paise=int(payload.total_amount * 100),
             receipt=payload.fare_id_outbound,
         )
-    except Exception as e: 
+    except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"Failed to create payment order: {str(e)}",
@@ -624,7 +641,9 @@ async def _send_eticket_background(provider_raw: dict, pnr: str) -> None:
             return
 
         pdf_bytes = generate_eticket_pdf(provider_raw)
-        passenger_name = f"{lead_pax.get('FirstName', '')} {lead_pax.get('LastName', '')}".strip()
+        passenger_name = (
+            f"{lead_pax.get('FirstName', '')} {lead_pax.get('LastName', '')}".strip()
+        )
         await send_customer_eticket_email(
             to_email=lead_pax["Email"],
             passenger_name=passenger_name,
@@ -713,8 +732,10 @@ def _decorate_response(
     background_tasks.add_task(send_staff_alert_email, subject, html)
     return resp
 
+
 async def _ticket_single_leg(
     *,
+    direction: str = "outbound",
     is_lcc: bool,
     payload: BookingConfirmRequest,
     cached_data: dict,
@@ -726,12 +747,20 @@ async def _ticket_single_leg(
     """Book and ticket a single flight leg (LCC or non-LCC)."""
     if is_lcc:
         lcc_req = transformer.transform_ticket_lcc_request(
-            payload, cached_data, end_user_ip, raw_ssr,
+            payload,
+            cached_data,
+            end_user_ip,
+            raw_ssr,
+            direction=direction,
         )
         return await client.generate_ticket_lcc(lcc_req)
 
     book_req = transformer.transform_book_request(
-        payload, cached_data, end_user_ip, raw_ssr,
+        payload,
+        cached_data,
+        end_user_ip,
+        raw_ssr,
+        direction=direction,
     )
     book_resp = await client.book_flight(book_req)
     book_inner = book_resp.Response.Response
@@ -765,7 +794,8 @@ class LegResult:
     Internal-only, never serialized. Holds ticket response OR recovery
     response OR error in one object. The `succeeded` property gives a clean boolean.
     """
-    direction: str          # "outbound" | "inbound"
+
+    direction: str  # "outbound" | "inbound"
     is_lcc: bool
     cached_data: dict
 
@@ -792,9 +822,16 @@ class LegResult:
 
 
 async def _process_single_leg(
-    *, direction: str, is_lcc: bool, payload: BookingConfirmRequest,
-    cached_data: dict, end_user_ip: str, raw_ssr: TBOSSRResponse | None,
-    client: TBOClient, transformer: TBOTransformer,
+    *,
+    direction: str,
+    is_lcc: bool,
+    payload: BookingConfirmRequest,
+    cached_data: dict,
+    end_user_ip: str,
+    raw_ssr: TBOSSRResponse | None,
+    client: TBOClient,
+    transformer: TBOTransformer,
+    req_id: str = "",
 ) -> LegResult:
     """Process one flight leg: ticket it, recover on timeout, capture errors.
 
@@ -803,15 +840,25 @@ async def _process_single_leg(
     """
     result = LegResult(direction=direction, is_lcc=is_lcc, cached_data=cached_data)
     try:
+        logger.info(
+            "[%s] _process_single_leg: about to ticket %s leg", req_id, direction
+        )
         result.ticket_response = await _ticket_single_leg(
-            is_lcc=is_lcc, payload=payload, cached_data=cached_data,
-            end_user_ip=end_user_ip, raw_ssr=raw_ssr,
-            client=client, transformer=transformer,
+            direction=direction,
+            is_lcc=is_lcc,
+            payload=payload,
+            cached_data=cached_data,
+            end_user_ip=end_user_ip,
+            raw_ssr=raw_ssr,
+            client=client,
+            transformer=transformer,
         )
     except httpx.TimeoutException as timeout_err:
         logger.warning(
             "TBO Book/Ticket timed out for %s leg (razorpay_payment_id=%s): %s",
-            direction, payload.razorpay_payment_id, str(timeout_err),
+            direction,
+            payload.razorpay_payment_id,
+            str(timeout_err),
         )
         try:
             lead_pax = next(
@@ -827,12 +874,22 @@ async def _process_single_leg(
             if details_resp and details_resp.Response.FlightItinerary:
                 itin = details_resp.Response.FlightItinerary
                 result.recovery_response = details_resp
-                result.recovered_ticket_status = _ticket_status_from_booking_status(itin.Status)
-                logger.info("Recovered %s booking via GetBookingDetails (pnr=%s)", direction, itin.PNR)
+                result.recovered_ticket_status = _ticket_status_from_booking_status(
+                    itin.Status
+                )
+                logger.info(
+                    "Recovered %s booking via GetBookingDetails (pnr=%s)",
+                    direction,
+                    itin.PNR,
+                )
             else:
-                result.error = Exception(f"TBO timeout on {direction} leg, recovery found no booking")
+                result.error = Exception(
+                    f"TBO timeout on {direction} leg, recovery found no booking"
+                )
         except Exception as recovery_err:
-            logger.error("Recovery lookup failed for %s leg: %s", direction, recovery_err)
+            logger.error(
+                "Recovery lookup failed for %s leg: %s", direction, recovery_err
+            )
             result.error = timeout_err
     except Exception as e:
         result.error = e
@@ -840,8 +897,14 @@ async def _process_single_leg(
 
 
 async def _persist_leg_result(
-    result: LegResult, *, booking_service: BookingService, user_id: int | None,
-    payment, trip_type: str, is_lcc: bool, linked_booking_id: int | None = None,
+    result: LegResult,
+    *,
+    booking_service: BookingService,
+    user_id: int | None,
+    payment,
+    trip_type: str,
+    is_lcc: bool,
+    linked_booking_id: int | None = None,
 ) -> None:
     """Persist a LegResult to DB. Mutates result.booking in place.
 
@@ -851,16 +914,23 @@ async def _persist_leg_result(
     try:
         if result.ticket_response is not None:
             result.booking = await booking_service.save_booking(
-                user_id=user_id, payment=payment, provider="tbo",
+                user_id=user_id,
+                payment=payment,
+                provider="tbo",
                 ticket_response=result.ticket_response,
-                direction=result.direction, trip_type=trip_type,
-                is_lcc=result.is_lcc, linked_booking_id=linked_booking_id,
+                direction=result.direction,
+                trip_type=trip_type,
+                is_lcc=result.is_lcc,
+                linked_booking_id=linked_booking_id,
             )
         elif result.recovery_response is not None:
             result.booking = await booking_service.save_booking_from_details(
-                user_id=user_id, payment=payment, provider="tbo",
+                user_id=user_id,
+                payment=payment,
+                provider="tbo",
                 details_response=result.recovery_response,
-                direction=result.direction, trip_type=trip_type,
+                direction=result.direction,
+                trip_type=trip_type,
                 is_lcc=result.is_lcc,
                 ticket_status=result.recovered_ticket_status,
                 linked_booking_id=linked_booking_id,
@@ -868,24 +938,33 @@ async def _persist_leg_result(
         else:
             error_msg = str(result.error) if result.error else "Unknown error"
             result.booking = await booking_service.save_failed_booking(
-                user_id=user_id, payment=payment, provider="tbo",
-                direction=result.direction, trip_type=trip_type,
-                is_lcc=result.is_lcc, error_message=error_msg,
+                user_id=user_id,
+                payment=payment,
+                provider="tbo",
+                direction=result.direction,
+                trip_type=trip_type,
+                is_lcc=result.is_lcc,
+                error_message=error_msg,
             )
-            if isinstance(result.error, TBOParseError) and hasattr(result.error, 'raw_response'):
+            if isinstance(result.error, TBOParseError) and hasattr(
+                result.error, "raw_response"
+            ):
                 result.booking.provider_raw = result.error.raw_response
                 result.booking.status = "needs_attention"
     except Exception as persist_err:
         logger.error(
             "Failed to persist %s leg: %s\n%s",
-            result.direction, persist_err, traceback.format_exc(),
+            result.direction,
+            persist_err,
+            traceback.format_exc(),
         )
         if result.succeeded:
             result.error = persist_err
 
 
 def _send_leg_alerts(
-    result: LegResult, payload: BookingConfirmRequest,
+    result: LegResult,
+    payload: BookingConfirmRequest,
     background_tasks: BackgroundTasks,
 ) -> None:
     """Send staff alert for a failed leg."""
@@ -895,20 +974,27 @@ def _send_leg_alerts(
     label = result.direction.upper()
     if isinstance(result.error, TBOParseError):
         subject, html = build_booking_attention_email(
-            payload, f"[{label}] TBO parse error: {error_msg}",
-            payload.razorpay_payment_id, payload.razorpay_order_id,
+            payload,
+            f"[{label}] TBO parse error: {error_msg}",
+            payload.razorpay_payment_id,
+            payload.razorpay_order_id,
         )
     else:
         subject, html = build_booking_failure_email(
-            payload, f"[{label}] {error_msg}",
-            payload.razorpay_payment_id, payload.razorpay_order_id,
+            payload,
+            f"[{label}] {error_msg}",
+            payload.razorpay_payment_id,
+            payload.razorpay_order_id,
         )
     background_tasks.add_task(send_staff_alert_email, subject, html)
 
 
 def _build_response_from_legs(
-    *, outbound: LegResult, inbound: LegResult | None,
-    payload: BookingConfirmRequest, background_tasks: BackgroundTasks,
+    *,
+    outbound: LegResult,
+    inbound: LegResult | None,
+    payload: BookingConfirmRequest,
+    background_tasks: BackgroundTasks,
     transformer: TBOTransformer,
 ) -> BookingConfirmResponse:
     """Build final API response from LegResult(s).
@@ -920,16 +1006,19 @@ def _build_response_from_legs(
     if outbound.succeeded:
         if outbound.ticket_response:
             resp = transformer.transform_booking_confirm_response(
-                outbound.ticket_response, outbound.is_lcc,
+                outbound.ticket_response,
+                outbound.is_lcc,
             )
         else:
             itin = outbound.recovery_response.Response.FlightItinerary
             resp = BookingConfirmResponse(
-                pnr=itin.PNR, booking_id=itin.BookingId,
+                pnr=itin.PNR,
+                booking_id=itin.BookingId,
                 is_lcc=outbound.is_lcc,
                 ticket_status=outbound.recovered_ticket_status,
                 ssr_denied=False,
-                invoice_no=itin.InvoiceNo, invoice_amount=itin.InvoiceAmount,
+                invoice_no=itin.InvoiceNo,
+                invoice_amount=itin.InvoiceAmount,
             )
         resp.booking_id = outbound.booking.id if outbound.booking else 0
     else:
@@ -957,11 +1046,14 @@ def _build_response_from_legs(
         if inbound.succeeded:
             if inbound.ticket_response:
                 resp_in = transformer.transform_booking_confirm_response(
-                    inbound.ticket_response, inbound.is_lcc,
+                    inbound.ticket_response,
+                    inbound.is_lcc,
                 )
                 resp.pnr_inbound = resp_in.pnr
             else:
-                resp.pnr_inbound = inbound.recovery_response.Response.FlightItinerary.PNR
+                resp.pnr_inbound = (
+                    inbound.recovery_response.Response.FlightItinerary.PNR
+                )
             resp.booking_id_inbound = inbound.booking.id if inbound.booking else 0
             resp.inbound_status = "confirmed"
         else:
@@ -988,7 +1080,9 @@ def _build_response_from_legs(
     # --- Decorate (e-ticket dispatch, soft-status alerts) for successful outbound ---
     if outbound.succeeded:
         return _decorate_response(
-            resp, payload, background_tasks,
+            resp,
+            payload,
+            background_tasks,
             ticket_provider_raw=outbound.provider_raw,
         )
     return resp
@@ -1005,6 +1099,16 @@ async def confirm_booking(
     db: AsyncSession = Depends(get_db),
     current_user: User | None = Depends(get_optional_current_user),
 ):
+    req_id = uuid4().hex[:8]
+    logger.info(
+        "[%s] confirm_booking START: razorpay_payment_id=%s, is_international_return=%s, fare_id_outbound=%s, fare_id_inbound=%s",
+        req_id,
+        payload.razorpay_payment_id,
+        payload.is_international_return,
+        payload.fare_id_outbound,
+        payload.fare_id_inbound,
+    )
+
     # 1. Validate cache
     cached_data = await cache.get(payload.fare_id_outbound)
     if not cached_data:
@@ -1054,16 +1158,19 @@ async def confirm_booking(
     )
 
     # Phase 1: Build legs list
-    legs_to_process = [{
-        "direction": "outbound",
-        "is_lcc": is_lcc,
-        "payload": payload,
-        "cached_data": cached_data,
-        "end_user_ip": end_user_ip,
-        "raw_ssr": raw_ssr,
-        "client": client,
-        "transformer": transformer,
-    }]
+    legs_to_process = [
+        {
+            "direction": "outbound",
+            "is_lcc": is_lcc,
+            "payload": payload,
+            "cached_data": cached_data,
+            "end_user_ip": end_user_ip,
+            "raw_ssr": raw_ssr,
+            "client": client,
+            "transformer": transformer,
+            "req_id": req_id,
+        }
+    ]
 
     cached_inbound = None
     is_lcc_inbound = False
@@ -1083,16 +1190,27 @@ async def confirm_booking(
                 status_code=status.HTTP_410_GONE,
                 detail="Seat and meal options for return flight have expired. Please refresh SSR and try booking again.",
             )
-        legs_to_process.append({
-            "direction": "inbound",
-            "is_lcc": is_lcc_inbound,
-            "payload": payload,
-            "cached_data": cached_inbound,
-            "end_user_ip": end_user_ip,
-            "raw_ssr": raw_ssr_in,
-            "client": client,
-            "transformer": transformer,
-        })
+        legs_to_process.append(
+            {
+                "direction": "inbound",
+                "is_lcc": is_lcc_inbound,
+                "payload": payload,
+                "cached_data": cached_inbound,
+                "end_user_ip": end_user_ip,
+                "raw_ssr": raw_ssr_in,
+                "client": client,
+                "transformer": transformer,
+                "req_id": req_id,
+            }
+        )
+
+    logger.info(
+        "[%s] confirm_booking: legs_to_process=%d, is_domestic_return=%s, directions=%s",
+        req_id,
+        len(legs_to_process),
+        is_domestic_return,
+        [leg["direction"] for leg in legs_to_process],
+    )
 
     # Phase 2: Process all legs concurrently (_process_single_leg never raises)
     leg_results = await asyncio.gather(
@@ -1104,8 +1222,11 @@ async def confirm_booking(
     outbound_result: LegResult = leg_results[0]
     await _persist_leg_result(
         outbound_result,
-        booking_service=booking_service, user_id=user_id,
-        payment=payment, trip_type=payload.trip_type, is_lcc=is_lcc,
+        booking_service=booking_service,
+        user_id=user_id,
+        payment=payment,
+        trip_type=payload.trip_type,
+        is_lcc=is_lcc,
     )
 
     inbound_result: LegResult | None = None
@@ -1114,9 +1235,12 @@ async def confirm_booking(
         linked_id = outbound_result.booking.id if outbound_result.booking else None
         await _persist_leg_result(
             inbound_result,
-            booking_service=booking_service, user_id=user_id,
-            payment=payment, trip_type=payload.trip_type,
-            is_lcc=is_lcc_inbound, linked_booking_id=linked_id,
+            booking_service=booking_service,
+            user_id=user_id,
+            payment=payment,
+            trip_type=payload.trip_type,
+            is_lcc=is_lcc_inbound,
+            linked_booking_id=linked_id,
         )
 
     # Phase 4: Single commit
@@ -1125,17 +1249,24 @@ async def confirm_booking(
     except Exception as commit_err:
         logger.error(
             "DB commit failed after booking (razorpay_payment_id=%s): %s\n%s",
-            payload.razorpay_payment_id, commit_err, traceback.format_exc(),
+            payload.razorpay_payment_id,
+            commit_err,
+            traceback.format_exc(),
         )
         subject, html = build_booking_failure_email(
-            payload, f"DB commit error: {commit_err}",
-            payload.razorpay_payment_id, payload.razorpay_order_id,
+            payload,
+            f"DB commit error: {commit_err}",
+            payload.razorpay_payment_id,
+            payload.razorpay_order_id,
         )
         background_tasks.add_task(send_staff_alert_email, subject, html)
         return BookingConfirmResponse(
-            pnr="PENDING", booking_id=0,
-            is_lcc=is_lcc, ticket_status=TicketStatus.PENDING,
-            ssr_denied=False, status="pending",
+            pnr="PENDING",
+            booking_id=0,
+            is_lcc=is_lcc,
+            ticket_status=TicketStatus.PENDING,
+            ssr_denied=False,
+            status="pending",
             support_phone=settings.SUPPORT_PHONE or None,
             support_email=settings.SUPPORT_EMAIL or None,
             error_message=(
@@ -1148,8 +1279,10 @@ async def confirm_booking(
 
     # Phase 5: Build response
     return _build_response_from_legs(
-        outbound=outbound_result, inbound=inbound_result,
-        payload=payload, background_tasks=background_tasks,
+        outbound=outbound_result,
+        inbound=inbound_result,
+        payload=payload,
+        background_tasks=background_tasks,
         transformer=transformer,
     )
 
@@ -1165,13 +1298,19 @@ async def download_eticket(
     booking_service = BookingService(db)
     booking = await booking_service.get_booking_by_id_and_pnr(booking_id, pnr)
     if not booking:
-        logger.warning("E-ticket: booking not found (booking_id=%s, pnr=%s)", booking_id, pnr)
+        logger.warning(
+            "E-ticket: booking not found (booking_id=%s, pnr=%s)", booking_id, pnr
+        )
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Booking not found.",
         )
     if booking.status != "confirmed":
-        logger.warning("E-ticket: booking status is '%s', not 'confirmed' (booking_id=%s)", booking.status, booking_id)
+        logger.warning(
+            "E-ticket: booking status is '%s', not 'confirmed' (booking_id=%s)",
+            booking.status,
+            booking_id,
+        )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="E-ticket is only available for confirmed bookings.",
@@ -1193,11 +1332,17 @@ async def download_eticket(
             detail="Failed to generate e-ticket PDF.",
         )
 
-    logger.info("E-ticket: PDF generated successfully for booking_id=%s, size=%d bytes", booking_id, len(pdf_bytes))
+    logger.info(
+        "E-ticket: PDF generated successfully for booking_id=%s, size=%d bytes",
+        booking_id,
+        len(pdf_bytes),
+    )
     return Response(
         content=bytes(pdf_bytes),
         media_type="application/pdf",
-        headers={"Content-Disposition": f"attachment; filename=FareClubs_ETicket_{booking.pnr}.pdf"},
+        headers={
+            "Content-Disposition": f"attachment; filename=FareClubs_ETicket_{booking.pnr}.pdf"
+        },
     )
 
 

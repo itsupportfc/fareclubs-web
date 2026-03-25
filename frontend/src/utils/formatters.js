@@ -51,7 +51,7 @@ export function buildSsr(passengerIndex, trip, segmentIndex, seats, meals, bags)
     const seatObj = seats[key]?.[passengerIndex];
     const mealObj = meals[key]?.[passengerIndex];
     const bagObj = bags[key]?.[passengerIndex];
-    const seatCode = seatObj?.code || null;
+    const seatCode = (seatObj?.status === "available" ? seatObj?.code : null) || null;
     const seatDescription = seatObj?.description || null;
     const mealCode = mealObj?.code || null;
     const mealDescription = mealObj?.name || mealObj?.description || null;

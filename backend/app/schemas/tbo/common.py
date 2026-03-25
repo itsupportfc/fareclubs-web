@@ -48,9 +48,9 @@ class AirportInfo(TBOBaseSchema):
     AirportName: str | None = None
     Terminal: str | None = None
     CityCode: str
-    CityName: str
+    CityName: str | None = None
     CountryCode: str
-    CountryName: str
+    CountryName: str | None = None
 
 
 class OriginInfo(TBOBaseSchema):

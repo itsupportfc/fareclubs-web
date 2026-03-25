@@ -30,6 +30,7 @@ import ContactDetailsSection from "../components/booking/ContactDetailsSection";
 import FareSummary from "../components/booking/FareSummary";
 import SSRModal from "../components/booking/SSRModal";
 import BookingProcessingOverlay from "../components/common/BookingProcessingOverlay";
+import { useTripConfig } from "../hooks/useTripConfig";
 
 const sectionVariants = {
     hidden: { opacity: 0, y: 20 },
@@ -60,6 +61,10 @@ export default function BookingPage() {
     } = state || {};
 
     const isRoundtrip = !!returnSelectedFare;
+    const tripConfig = useTripConfig({
+        tripType: isRoundtrip ? "roundtrip" : "oneway",
+        isInternationalReturn,
+    });
 
     const perPaxOutbound = perPassengerFaresOutbound || perPassengerFares || [];
     const perPaxInbound = perPassengerFaresInbound || [];
@@ -78,7 +83,6 @@ export default function BookingPage() {
     const [selectedBag, setSelectedBag] = useState({});
     const [bookingError, setBookingError] = useState(null);
     const [ssrLoading, setSsrLoading] = useState(false);
-
 
     const token = localStorage.getItem("access_token");
     const { initiateBooking, isProcessing, processingStep } =
@@ -245,7 +249,10 @@ export default function BookingPage() {
         );
         return {
             fareIdOutbound: outboundSelectedFare.fareId,
-            fareIdInbound: returnSelectedFare?.fareId || null,
+            fareIdInbound: tripConfig.getFareIdInbound(
+                outboundSelectedFare,
+                returnSelectedFare,
+            ),
             tripType: isRoundtrip ? "roundtrip" : "oneway",
             isInternationalReturn,
             totalAmount:
@@ -253,6 +260,8 @@ export default function BookingPage() {
                 (returnSelectedFare?.totalPrice || 0) +
                 total,
             passengers: (() => {
+                const outSegCount = ssrData?.outbound?.segments?.length || 0;
+                const inSegCount = ssrData?.inbound?.segments?.length || 0;
                 const list = travellers.map((t, i) => {
                     const paxType =
                         t.type === "Adult" ? 1 : t.type === "Child" ? 2 : 3;
@@ -260,6 +269,27 @@ export default function BookingPage() {
                     const perHeadIn = isRoundtrip
                         ? getPerHeadFare(paxType, "inbound")
                         : null;
+
+                    // Build per-segment SSR for outbound
+                    const ssrSegmentsOutbound = (() => {
+                        if (!outSegCount) return null;
+                        const segs = [];
+                        for (let s = 0; s < outSegCount; s++) {
+                            segs.push(buildSsr(i, "outbound", s, selectedSeats, selectedMeals, selectedBag));
+                        }
+                        return segs.some(Boolean) ? segs : null;
+                    })();
+
+                    // Build per-segment SSR for inbound
+                    const ssrSegmentsInbound = (() => {
+                        if (!isRoundtrip || !inSegCount) return null;
+                        const segs = [];
+                        for (let s = 0; s < inSegCount; s++) {
+                            segs.push(buildSsr(i, "inbound", s, selectedSeats, selectedMeals, selectedBag));
+                        }
+                        return segs.some(Boolean) ? segs : null;
+                    })();
+
                     const pax = {
                         title: t.title,
                         firstName: t.firstName,
@@ -285,15 +315,8 @@ export default function BookingPage() {
                                 perHeadOut.additionalTxnFeePub || 0,
                             pgCharge: perHeadOut.pgCharge || 0,
                         },
-                        ssr:
-                            buildSsr(
-                                i,
-                                "outbound",
-                                0,
-                                selectedSeats,
-                                selectedMeals,
-                                selectedBag,
-                            ) || null,
+                        ssrSegmentsOutbound,
+                        ssrSegmentsInbound,
                     };
                     if (t.pan) pax.pan = t.pan;
                     if (t.passportNo) {
@@ -388,13 +411,33 @@ export default function BookingPage() {
                         <div className="space-y-4">
                             <FlightItineraryCard
                                 flight={outboundFlight}
-                                selectedFare={outboundSelectedFare}
+                                selectedFare={{
+                                    ...outboundSelectedFare,
+                                    segments:
+                                        tripConfig.getOutboundSegments(
+                                            outboundSelectedFare,
+                                        ),
+                                }}
                                 title={isRoundtrip ? "Outbound" : undefined}
                             />
-                            {isRoundtrip && (
+                            {tripConfig.showReturnItinerary && (
                                 <FlightItineraryCard
-                                    flight={returnFlight}
-                                    selectedFare={returnSelectedFare}
+                                    flight={
+                                        tripConfig.type ===
+                                        "international_return"
+                                            ? outboundFlight
+                                            : returnFlight
+                                    }
+                                    selectedFare={{
+                                        ...(tripConfig.type ===
+                                        "international_return"
+                                            ? outboundSelectedFare
+                                            : returnSelectedFare),
+                                        segments: tripConfig.getReturnSegments(
+                                            outboundSelectedFare,
+                                            returnSelectedFare,
+                                        ),
+                                    }}
                                     title="Return"
                                 />
                             )}
@@ -628,6 +671,7 @@ export default function BookingPage() {
                         mealTotal={mealTotal}
                         bagTotal={bagTotal}
                         ssrTotal={ssrTotal}
+                        showFareBreakdown={tripConfig.showFareBreakdown}
                     />
                 </div>
 

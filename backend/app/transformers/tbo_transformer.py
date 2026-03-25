@@ -55,7 +55,7 @@ from app.schemas.tbo.common import (
     SeatDynamic,
     SimpleMeal,
 )
-from app.schemas.tbo.enums import BaggageDescriptionEnum, FlightCabinClass, JourneyType
+from app.schemas.tbo.enums import BaggageDescriptionEnum, FlightCabinClass, JourneyType, SeatAvailabilityTypeEnum
 from app.schemas.tbo.enums import PassengerType as TBOPassengerType
 from app.schemas.tbo.fare_quote import TBOFareQuoteResponse
 from app.schemas.tbo.fare_rule import TBOFareRuleRequest, TBOFareRuleResponse
@@ -186,7 +186,7 @@ class TBOTransformer:
                                 code=seat.Code,
                                 price=seat.Price,
                                 status=SEAT_STATUS_MAP.get(
-                                    seat.AvailablityType, "available"
+                                    seat.AvailablityType, "occupied"
                                 ),
                                 type=cast(SeatType, SEAT_TYPE_MAP[seat.SeatType]),
                             )
@@ -256,7 +256,7 @@ class TBOTransformer:
                                 code=seat.Code,
                                 price=seat.Price,
                                 status=SEAT_STATUS_MAP.get(
-                                    seat.AvailablityType, "available"
+                                    seat.AvailablityType, "occupied"
                                 ),
                                 type=cast(SeatType, SEAT_TYPE_MAP[seat.SeatType]),
                             )
@@ -384,6 +384,7 @@ class TBOTransformer:
         cached_data: dict,
         end_user_ip: str,
         raw_ssr: Optional[TBOSSRResponse] = None,
+        direction: str = "outbound",
     ) -> TBOBookRequest:
         """Build TBO Book request for Non-LCC flights."""
         free_ssr = self._find_free_ssr(raw_ssr)
@@ -413,18 +414,28 @@ class TBOTransformer:
                 OtherCharges=p.fare.other_charges,
             )
 
+            # Determine SSR segments for this direction
+            if request.is_international_return:
+                ssr_segments = (p.ssr_segments_outbound or []) + (p.ssr_segments_inbound or [])
+            elif direction == "inbound":
+                ssr_segments = p.ssr_segments_inbound or []
+            else:
+                ssr_segments = p.ssr_segments_outbound or []
+
+            first_ssr = ssr_segments[0] if ssr_segments else None
+
             meal = None
             seat_pref = None
             baggage = None
-            if p.ssr:
-                if p.ssr.meal_code:
-                    meal = MealSelection(Code=p.ssr.meal_code, Description=2)
-                if p.ssr.seat_code:
+            if first_ssr:
+                if first_ssr.meal_code:
+                    meal = MealSelection(Code=first_ssr.meal_code, Description=2)
+                if first_ssr.seat_code:
                     seat_pref = SeatDynamicSelection(
-                        Code=p.ssr.seat_code, Description=2
+                        Code=first_ssr.seat_code, Description=2
                     )
-                if p.ssr.baggage_code:
-                    baggage = BaggageSelection(Code=p.ssr.baggage_code, Description=2)
+                if first_ssr.baggage_code:
+                    baggage = BaggageSelection(Code=first_ssr.baggage_code, Description=2)
 
             # Auto-assign free SSR if user didn't select
             if not meal and free_ssr["free_meal_code"]:
@@ -491,36 +502,41 @@ class TBOTransformer:
         end_user_ip: str,
         raw_ssr: Optional[TBOSSRResponse] = None,
         force_no_seat_selection: bool = False,
+        direction: str = "outbound",
     ) -> TBOTicketLCCRequest:
         """Build TBO Ticket request for LCC flights."""
         free_ssr = self._find_free_ssr(raw_ssr)
 
-        # Build lookup maps from cached SSR
-        baggage_map: dict[str, Baggage] = {}
-        meal_map: dict[str, Meal] = {}
-        seat_map: dict[str, Seat] = {}
+        # Build per-segment lookup maps from cached SSR
+        seat_maps: list[dict[str, Seat]] = []
+        baggage_maps: list[dict[str, Baggage]] = []
+        meal_maps: list[dict[str, Meal]] = []
         free_meals_by_segment: list[Meal] = []
         no_seat_list: list[Seat] = []
+        segment_keys: list[tuple[str, str]] = []  # (Origin, FlightNumber) per segment
 
         if raw_ssr and raw_ssr.Response:
-            if raw_ssr.Response.Baggage:
-                for seg_options in raw_ssr.Response.Baggage:
-                    for b in seg_options or []:
-                        baggage_map[b.Code] = b
-
+            # Process seats FIRST to establish segment ordering
             if raw_ssr.Response.SeatDynamic:
                 for sd in raw_ssr.Response.SeatDynamic:
                     if sd.SegmentSeat:
                         for seg in sd.SegmentSeat:
+                            seg_seats: dict[str, Seat] = {}
                             reference_seat: Seat | None = None
                             if seg.RowSeats:
                                 for row in seg.RowSeats:
                                     for seat in row.Seats:
                                         if reference_seat is None:
                                             reference_seat = seat
-                                        if seat.Code and seat.Code != "NoSeat":
-                                            seat_map[seat.Code] = seat
+                                        if (
+                                            seat.Code
+                                            and seat.Code != "NoSeat"
+                                            and seat.AvailablityType == SeatAvailabilityTypeEnum.AVAILABLE
+                                        ):
+                                            seg_seats[seat.Code] = seat
+                            seat_maps.append(seg_seats)
                             if reference_seat:
+                                segment_keys.append((reference_seat.Origin, reference_seat.FlightNumber))
                                 no_seat_list.append(
                                     Seat(
                                         AirlineCode=reference_seat.AirlineCode,
@@ -542,18 +558,54 @@ class TBOTransformer:
                                     )
                                 )
 
+            # Baggage — group by (Origin, FlightNumber) to split merged direction arrays
+            if raw_ssr.Response.Baggage:
+                for seg_options in raw_ssr.Response.Baggage:
+                    grouped: dict[tuple[str, str], dict[str, Baggage]] = {}
+                    for b in seg_options or []:
+                        key = (b.Origin, b.FlightNumber)
+                        if key not in grouped:
+                            grouped[key] = {}
+                        grouped[key][b.Code] = b
+
+                    seen: set[tuple[str, str]] = set()
+                    for sk in segment_keys:
+                        if sk in grouped and sk not in seen:
+                            seen.add(sk)
+                            baggage_maps.append(grouped[sk])
+                    for gk, gv in grouped.items():
+                        if gk not in seen:
+                            baggage_maps.append(gv)
+
+            # Meals — group by (Origin, FlightNumber) to split merged direction arrays
             if raw_ssr.Response.MealDynamic:
                 for seg_options in raw_ssr.Response.MealDynamic:
+                    grouped_meals: dict[tuple[str, str], dict[str, Meal]] = {}
+                    free_per_group: dict[tuple[str, str], Meal | None] = {}
                     for m in seg_options or []:
                         if m.Code == "NoMeal":
                             continue
-                        meal_map[m.Code] = m
-                    free_meal = next(
-                        (meal for meal in (seg_options or []) if meal.Price == 0 and meal.Code != "NoMeal"),
-                        None,
-                    )
-                    if free_meal:
-                        free_meals_by_segment.append(free_meal)
+                        key = (m.Origin, m.FlightNumber)
+                        if key not in grouped_meals:
+                            grouped_meals[key] = {}
+                        grouped_meals[key][m.Code] = m
+                        if m.Price == 0 and key not in free_per_group:
+                            free_per_group[key] = m
+
+                    seen_meals: set[tuple[str, str]] = set()
+                    for sk in segment_keys:
+                        if sk in grouped_meals and sk not in seen_meals:
+                            seen_meals.add(sk)
+                            meal_maps.append(grouped_meals[sk])
+                            if sk in free_per_group:
+                                free_meals_by_segment.append(free_per_group[sk])
+                    for gk, gv in grouped_meals.items():
+                        if gk not in seen_meals:
+                            meal_maps.append(gv)
+                            if gk in free_per_group:
+                                free_meals_by_segment.append(free_per_group[gk])
+
+        num_segments = max(len(seat_maps), len(no_seat_list), 1)
 
         passengers = []
         for p in request.passengers:
@@ -577,35 +629,57 @@ class TBOTransformer:
                 PGCharge=p.fare.pg_charge or 0,
             )
 
-            baggage_list: list[Baggage] | None = None
-            meal_list: list[Meal] | None = None
+            # Determine SSR segments for this passenger based on direction
+            if request.is_international_return:
+                ssr_segments = (p.ssr_segments_outbound or []) + (p.ssr_segments_inbound or [])
+            elif direction == "inbound":
+                ssr_segments = p.ssr_segments_inbound or []
+            else:
+                ssr_segments = p.ssr_segments_outbound or []
 
-            if p.ssr:
-                if p.ssr.baggage_code and p.ssr.baggage_code in baggage_map:
-                    baggage_list = [baggage_map[p.ssr.baggage_code]]
-                if p.ssr.meal_code and p.ssr.meal_code in meal_map:
-                    meal_list = [meal_map[p.ssr.meal_code]]
+            # Build per-segment SSR lists
+            baggage_list: list[Baggage] = []
+            meal_list: list[Meal] = []
+            seat_dynamic: list[Seat] = []
 
-            # Auto-assign free SSR if user didn't select
+            for seg_idx in range(num_segments):
+                seg_ssr = ssr_segments[seg_idx] if seg_idx < len(ssr_segments) else None
+
+                # Baggage
+                if seg_ssr and seg_ssr.baggage_code:
+                    bag_map = baggage_maps[seg_idx] if seg_idx < len(baggage_maps) else {}
+                    if seg_ssr.baggage_code in bag_map:
+                        baggage_list.append(bag_map[seg_ssr.baggage_code])
+
+                # Meals
+                if seg_ssr and seg_ssr.meal_code:
+                    m_map = meal_maps[seg_idx] if seg_idx < len(meal_maps) else {}
+                    if seg_ssr.meal_code in m_map:
+                        meal_list.append(m_map[seg_ssr.meal_code])
+
+                # Seats (skip infants)
+                if p.pax_type != 3:
+                    s_map = seat_maps[seg_idx] if seg_idx < len(seat_maps) else {}
+                    if (
+                        not force_no_seat_selection
+                        and seg_ssr
+                        and seg_ssr.seat_code
+                        and seg_ssr.seat_code in s_map
+                    ):
+                        seat_dynamic.append(s_map[seg_ssr.seat_code])
+                    elif seg_idx < len(no_seat_list):
+                        seat_dynamic.append(no_seat_list[seg_idx])
+
+            # Auto-assign free SSR if user didn't select anything
             if not meal_list and free_meals_by_segment:
                 meal_list = list(free_meals_by_segment)
             elif not meal_list and free_ssr["free_meal_lcc"]:
                 meal_list = [free_ssr["free_meal_lcc"]]
-            if p.pax_type != 3:  # not infant
+            if p.pax_type != 3:
+                if not seat_dynamic and no_seat_list:
+                    seat_dynamic = list(no_seat_list)
                 if not baggage_list and free_ssr["free_baggage"]:
                     baggage_list = [free_ssr["free_baggage"]]
-
-            seat_dynamic: list[Seat] | None = None
-            if p.pax_type != 3:
-                if (
-                    not force_no_seat_selection
-                    and p.ssr
-                    and p.ssr.seat_code
-                    and p.ssr.seat_code in seat_map
-                ):
-                    seat_dynamic = [seat_map[p.ssr.seat_code]]
-                elif no_seat_list:
-                    seat_dynamic = list(no_seat_list)
 
             dob = (
                 p.date_of_birth
@@ -648,9 +722,9 @@ class TBOTransformer:
                     else None,
                     GSTCompanyEmail=p.gst.gst_company_email if p.gst else None,
                     Fare=fare,
-                    Baggage=baggage_list,
-                    MealDynamic=meal_list,
-                    SeatDynamic=seat_dynamic,
+                    Baggage=baggage_list or None,
+                    MealDynamic=meal_list or None,
+                    SeatDynamic=seat_dynamic or None,
                 )
             )
 

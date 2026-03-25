@@ -12,6 +12,7 @@ class FareQuoteRequest(InternalBaseSchema):
     initial_price_outbound: float
     fare_id_inbound: str | None = None
     initial_price_inbound: float | None = None
+    is_international_return: bool = False  # When True, skip inbound TBO call
 
 
 class FlightPriceDetail(InternalBaseSchema):

@@ -2463,3 +2463,802 @@
 
 
 
+
+
+
+
+
+// 2026-03-25 10:19:37,355 app.clients.tbo_client INFO TBO TicketLCC request:
+{
+    "EndUserIp": "172.18.0.1",
+    "TraceId": "86617af3-8f8a-41e2-ab1f-2b473183de4c",
+    "ResultIndex": "OB224[TBO]Cph2Go3LQ85LzkDV17K2Tq1vzSJwI9Y0A7zuAKejw4vXkieB0QxrxtbXfUh8r6emyQY/N/lK83ArV3Xq9eozonCmGHGDFD4URlBGdiYzbBu0sKOS3LMLwfildunE/vizz4oNkzjLFYDw7U4thKCAeQQzlqYtpYk/+jaaWLzzD3V94zrzy7N8NS1tCGU//tRfFVxPl2gm9xm2yKWotropr24v+jBGqwuxMvdx3/LUOfil9gY1wOBtfyIq4W/2RtVUr+nYHERUdhft6AhHvFK3lpdKPXEM4lA1ssLTKu5VQbIeIpOMgB7+b8BmzMmUwu/Fqb0ukOplHCJTQlFPhnq8c7IbJeTJPgAx/aPb5pEE0xj0pQS7b0jqOgBjmsEW15bo7gv3hGL2vYIpXbFzS1DyUQUKvJDwbzcdrKJ0qWM6xTDuOQdeM74QM6vZSF55vxdGeqbNuZ7BYhfJqxebOAdoll3lhM8TOhmoyny+bX/uKNw9EBDy78EJz50J/AQ9GKwMNgBfru0ZL/BxR/P7XvltLi5s0aiIPhQlvn+rSB0hGJ4TR9rKzPUTjImPhnn5QbWwkoAcUL4cn+dFirJvOO1NyBDkIF1Irz+iS8gyqw+Sx6ZgBKPJhYBIM8KZNXK+7xXpF9o1Sq7jveJqhCKRAaY+p800AQxk5vEY8vPQQS0/sfCQUNp63APOuRFzXIVydaXbqm8iGatKK2FQYeg98mCFml5CxWi4cRtcHe6R7Gk5KhhJVk52cpSBfn/fvEfAJ0aNoOCcTHD+FkY3BmuUB3fB3wQlf1OrjIX/2xui427lHTZ3cvxI2aZhAs2RVGHGN/M6JuuC7Mr2sUTrpjzjaPy7JAjleN/UsUJB8ImdqbWrSyBveolpt/7HMquwWVDx//oL",
+    "Passengers": [
+        {
+            "Title": "Mr",
+            "FirstName": "rahul",
+            "LastName": "yadav",
+            "PaxType": 1,
+            "Gender": 1,
+            "DateOfBirth": "1992-11-23T00:00:00",
+            "AddressLine1": "sec-18",
+            "City": "gurgaon",
+            "CountryCode": "IN",
+            "CountryName": "India",
+            "ContactNo": "9540420024",
+            "Email": "coderrulz71@gmail.com",
+            "IsLeadPax": true,
+            "Nationality": "IN",
+            "Fare": {
+                "BaseFare": 23466.0,
+                "Tax": 7453.28,
+                "YQTax": 1800.0,
+                "AdditionalTxnFeeOfrd": 0.0,
+                "AdditionalTxnFeePub": 0.0,
+                "PGCharge": 0.0,
+            },
+            "Baggage": [
+                {
+                    "AirlineCode": "6E",
+                    "FlightNumber": "1463",
+                    "WayType": 2,
+                    "Code": "XBPE",
+                    "Description": 2,
+                    "Weight": 3.0,
+                    "Currency": "INR",
+                    "Price": 3100.0,
+                    "Origin": "DEL",
+                    "Destination": "DXB",
+                },
+                {
+                    "AirlineCode": "6E",
+                    "FlightNumber": "1502",
+                    "WayType": 2,
+                    "Code": "XBPA",
+                    "Description": 2,
+                    "Weight": 5.0,
+                    "Currency": "INR",
+                    "Price": 6433.0,
+                    "Origin": "FJR",
+                    "Destination": "DEL",
+                },
+            ],
+            "MealDynamic": [
+                {
+                    "AirlineCode": "6E",
+                    "FlightNumber": "1463",
+                    "WayType": 2,
+                    "Code": "WHSK",
+                    "Description": 2,
+                    "AirlineDescription": "Whiskey \u2013 50 ML (2 Miniatures)",
+                    "Quantity": 1,
+                    "Currency": "INR",
+                    "Price": 1250.0,
+                    "Origin": "DEL",
+                    "Destination": "DXB",
+                },
+                {
+                    "AirlineCode": "6E",
+                    "FlightNumber": "301",
+                    "WayType": 1,
+                    "Code": "VBIR",
+                    "Description": 2,
+                    "AirlineDescription": "VEG BIRYANI Combo",
+                    "Quantity": 1,
+                    "Currency": "INR",
+                    "Price": 400.0,
+                    "Origin": "BOM",
+                    "Destination": "DEL",
+                },
+            ],
+            "SeatDynamic": [
+                {
+                    "AirlineCode": "6E",
+                    "FlightNumber": "1463",
+                    "CraftType": "A321-220",
+                    "Origin": "DEL",
+                    "Destination": "DXB",
+                    "AvailablityType": 1,
+                    "Description": 2,
+                    "Code": "6A",
+                    "RowNo": "6",
+                    "SeatNo": "A",
+                    "SeatType": 1,
+                    "SeatWayType": 2,
+                    "Compartment": 2,
+                    "Deck": 1,
+                    "Currency": "INR",
+                    "Price": 1300.0,
+                },
+                {
+                    "AirlineCode": "6E",
+                    "FlightNumber": "1502",
+                    "CraftType": "A320-186",
+                    "Origin": "FJR",
+                    "Destination": "BOM",
+                    "AvailablityType": 1,
+                    "Description": 2,
+                    "Code": "6A",
+                    "RowNo": "6",
+                    "SeatNo": "A",
+                    "SeatType": 1,
+                    "SeatWayType": 1,
+                    "Compartment": 1,
+                    "Deck": 1,
+                    "Currency": "INR",
+                    "Price": 550.0,
+                },
+                {
+                    "AirlineCode": "6E",
+                    "FlightNumber": "301",
+                    "CraftType": "A321-220",
+                    "Origin": "BOM",
+                    "Destination": "DEL",
+                    "AvailablityType": 1,
+                    "Description": 2,
+                    "Code": "6A",
+                    "RowNo": "6",
+                    "SeatNo": "A",
+                    "SeatType": 1,
+                    "SeatWayType": 1,
+                    "Compartment": 2,
+                    "Deck": 1,
+                    "Currency": "INR",
+                    "Price": 730.0,
+                },
+            ],
+        },
+    ],
+}
+// 2026-03-25 10:19:47,788 app.clients.tbo_client INFO TBO TicketLCC response:
+// {
+//   "Response": {
+//     "B2B2BStatus": false,
+//     "Error": {
+//       "ErrorCode": 0,
+//       "ErrorMessage": ""
+//     },
+//     "ResponseStatus": 1,
+//     "TraceId": "86617af3-8f8a-41e2-ab1f-2b473183de4c",
+//     "Response": {
+//       "ItineraryChangeList": null,
+//       "PNR": "MRYTFC",
+//       "BookingId": 2099182,
+//       "SSRDenied": false,
+//       "SSRMessage": null,
+//       "Status": 1,
+//       "IsPriceChanged": false,
+//       "IsTimeChanged": false,
+//       "FlightItinerary": {
+//         "CommentDetails": null,
+//         "FareClassification": "Return Special#rgb(182,215,228)",
+//         "IsAutoReissuanceAllowed": true,
+//         "IsPartialVoidAllowed": true,
+//         "IsSeatsBooked": true,
+//         "IssuancePcc": "OTI011",
+//         "JourneyType": 2,
+//         "SearchCombinationType": 2,
+//         "SupplierFareClasses": "Return Special",
+//         "TBOConfNo": "TBFQLVNAN",
+//         "TBOTripID": null,
+//         "TripIndicator": 1,
+//         "BookingAllowedForRoamer": true,
+//         "BookingId": 2099182,
+//         "IsCouponAppilcable": true,
+//         "IsManual": false,
+//         "PNR": "MRYTFC",
+//         "IsDomestic": false,
+//         "ResultFareType": "RegularFare",
+//         "Source": 6,
+//         "Origin": "DEL",
+//         "Destination": "DXB",
+//         "AirlineCode": "6E",
+//         "LastTicketDate": "2026-03-25T21:44:46",
+//         "ValidatingAirlineCode": "6E",
+//         "AirlineRemark": "6E main",
+//         "AirlineTollFreeNo": "1800-0001-5456-51515",
+//         "IsLCC": true,
+//         "NonRefundable": false,
+//         "FareType": "RP",
+//         "CreditNoteNo": null,
+//         "Fare": {
+//           "CFARAmount": 0,
+//           "DCFARAmount": 0,
+//           "ServiceFeeDisplayType": 0,
+//           "Currency": "INR",
+//           "BaseFare": 23466.0,
+//           "Tax": 7453.28,
+//           "TaxBreakup": [
+//             {
+//               "key": "K3",
+//               "value": 0
+//             },
+//             {
+//               "key": "TotalTax",
+//               "value": 7453.28
+//             }
+//           ],
+//           "YQTax": 1800.0,
+//           "AdditionalTxnFeeOfrd": 0,
+//           "AdditionalTxnFeePub": 0.0,
+//           "PGCharge": 0,
+//           "OtherCharges": 0.0,
+//           "ChargeBU": [
+//             {
+//               "key": "TBOMARKUP",
+//               "value": 0
+//             },
+//             {
+//               "key": "GLOBALPROCUREMENTCHARGE",
+//               "value": 0
+//             },
+//             {
+//               "key": "OTHERCHARGE",
+//               "value": 0.0
+//             },
+//             {
+//               "key": "CONVENIENCECHARGE",
+//               "value": 0
+//             }
+//           ],
+//           "Discount": 0.0,
+//           "PublishedFare": 44682.28,
+//           "CommissionEarned": 962.11,
+//           "PLBEarned": 1089.03,
+//           "IncentiveEarned": 369.06,
+//           "OfferedFare": 43230.15,
+//           "TdsOnCommission": 384.84,
+//           "TdsOnPLB": 435.61,
+//           "TdsOnIncentive": 147.62,
+//           "ServiceFee": 0,
+//           "TotalBaggageCharges": 9533.0,
+//           "TotalMealCharges": 1650.0,
+//           "TotalSeatCharges": 2580.0,
+//           "TotalSpecialServiceCharges": 0.0
+//         },
+//         "CreditNoteCreatedOn": null,
+//         "Passenger": [
+//           {
+//             "BarcodeDetails": {
+//               "Id": 3384785,
+//               "Barcode": [
+//                 {
+//                   "Index": 1,
+//                   "Format": "PDF417",
+//                   "Content": "M1YADAV/RAHUL          MRYTFC DELDXB6E 1463 118Y006A00000000",
+//                   "BarCodeInBase64": null,
+//                   "JourneyWayType": 3
+//                 },
+//                 {
+//                   "Index": 2,
+//                   "Format": "PDF417",
+//                   "Content": "M1YADAV/RAHUL          MRYTFC FJRDEL6E 1502 120Y006A00000000",
+//                   "BarCodeInBase64": null,
+//                   "JourneyWayType": 3
+//                 }
+//               ]
+//             },
+//             "DocumentDetails": null,
+//             "GuardianDetails": null,
+//             "IsReissued": false,
+//             "SegmentDetails": [
+//               {
+//                 "CabinBaggage": {
+//                   "FreeText": "7 Kg",
+//                   "Unit": "Kg",
+//                   "Value": "7"
+//                 },
+//                 "CheckedInBaggage": {
+//                   "FreeText": "",
+//                   "Unit": "Kg",
+//                   "Value": "30"
+//                 },
+//                 "FlightInfoIndex": "1"
+//               },
+//               {
+//                 "CabinBaggage": {
+//                   "FreeText": "7 Kg",
+//                   "Unit": "Kg",
+//                   "Value": "7"
+//                 },
+//                 "CheckedInBaggage": {
+//                   "FreeText": "",
+//                   "Unit": "Kg",
+//                   "Value": "30"
+//                 },
+//                 "FlightInfoIndex": "2"
+//               },
+//               {
+//                 "CabinBaggage": {
+//                   "FreeText": "7 Kg",
+//                   "Unit": "Kg",
+//                   "Value": "7"
+//                 },
+//                 "CheckedInBaggage": {
+//                   "FreeText": "",
+//                   "Unit": "Kg",
+//                   "Value": "30"
+//                 },
+//                 "FlightInfoIndex": "3"
+//               }
+//             ],
+//             "PaxId": 3384785,
+//             "Title": "Mr",
+//             "FirstName": "rahul",
+//             "LastName": "yadav",
+//             "PaxType": 1,
+//             "DateOfBirth": "1992-11-23T00:00:00",
+//             "Gender": 1,
+//             "IsPANRequired": false,
+//             "IsPassportRequired": false,
+//             "PAN": "",
+//             "PassportNo": "",
+//             "AddressLine1": "sec-18",
+//             "Fare": {
+//               "CFARAmount": 0,
+//               "DCFARAmount": 0,
+//               "ServiceFeeDisplayType": 0,
+//               "Currency": "INR",
+//               "BaseFare": 23466.0,
+//               "Tax": 7453.28,
+//               "TaxBreakup": [
+//                 {
+//                   "key": "K3",
+//                   "value": 0
+//                 },
+//                 {
+//                   "key": "TotalTax",
+//                   "value": 7453.28
+//                 }
+//               ],
+//               "YQTax": 1800.0,
+//               "AdditionalTxnFeeOfrd": 0,
+//               "AdditionalTxnFeePub": 0.0,
+//               "PGCharge": 0,
+//               "OtherCharges": 0.0,
+//               "ChargeBU": [
+//                 {
+//                   "key": "TBOMARKUP",
+//                   "value": 0
+//                 },
+//                 {
+//                   "key": "GLOBALPROCUREMENTCHARGE",
+//                   "value": 0
+//                 },
+//                 {
+//                   "key": "OTHERCHARGE",
+//                   "value": 0.0
+//                 },
+//                 {
+//                   "key": "CONVENIENCECHARGE",
+//                   "value": 0
+//                 }
+//               ],
+//               "Discount": 0.0,
+//               "PublishedFare": 44682.28,
+//               "CommissionEarned": 962.11,
+//               "PLBEarned": 1089.03,
+//               "IncentiveEarned": 369.06,
+//               "OfferedFare": 43230.15,
+//               "TdsOnCommission": 384.84,
+//               "TdsOnPLB": 435.61,
+//               "TdsOnIncentive": 147.62,
+//               "ServiceFee": 0,
+//               "TotalBaggageCharges": 9533.0,
+//               "TotalMealCharges": 1650.0,
+//               "TotalSeatCharges": 2580.0,
+//               "TotalSpecialServiceCharges": 0.0
+//             },
+//             "City": "gurgaon",
+//             "CountryCode": "IN",
+//             "CountryName": "India",
+//             "Nationality": "IN",
+//             "ContactNo": "9540420024",
+//             "Email": "coderrulz71@gmail.com",
+//             "IsLeadPax": true,
+//             "FFAirlineCode": null,
+//             "FFNumber": null,
+//             "Baggage": [
+//               {
+//                 "AirlineCode": "6E",
+//                 "FlightNumber": "1463",
+//                 "WayType": 2,
+//                 "Code": "XBPE",
+//                 "Description": 2,
+//                 "Weight": 3,
+//                 "Currency": "INR",
+//                 "Price": 3100.0,
+//                 "Origin": "DEL",
+//                 "Destination": "DXB"
+//               },
+//               {
+//                 "AirlineCode": "6E",
+//                 "FlightNumber": "1502",
+//                 "WayType": 2,
+//                 "Code": "XBPA",
+//                 "Description": 2,
+//                 "Weight": 5,
+//                 "Currency": "INR",
+//                 "Price": 6433.0,
+//                 "Origin": "FJR",
+//                 "Destination": "DEL"
+//               }
+//             ],
+//             "MealDynamic": [
+//               {
+//                 "AirlineCode": "6E",
+//                 "FlightNumber": "1463",
+//                 "WayType": 2,
+//                 "Code": "WHSK",
+//                 "Description": 2,
+//                 "AirlineDescription": "Whiskey \u2013 50 ML (2 Miniatures)",
+//                 "Quantity": 1,
+//                 "Currency": "INR",
+//                 "Price": 1250.0,
+//                 "Origin": "DEL",
+//                 "Destination": "DXB"
+//               },
+//               {
+//                 "AirlineCode": "6E",
+//                 "FlightNumber": "301",
+//                 "WayType": 1,
+//                 "Code": "VBIR",
+//                 "Description": 2,
+//                 "AirlineDescription": "VEG BIRYANI Combo",
+//                 "Quantity": 1,
+//                 "Currency": "INR",
+//                 "Price": 400.0,
+//                 "Origin": "BOM",
+//                 "Destination": "DEL"
+//               }
+//             ],
+//             "SeatDynamic": [
+//               {
+//                 "AirlineCode": "6E",
+//                 "FlightNumber": "1463",
+//                 "CraftType": "A321-220",
+//                 "Origin": "DEL",
+//                 "Destination": "DXB",
+//                 "AvailablityType": 1,
+//                 "Description": 2,
+//                 "Code": "6A",
+//                 "RowNo": "6",
+//                 "SeatNo": "A",
+//                 "SeatType": 1,
+//                 "SeatWayType": 2,
+//                 "Compartment": 2,
+//                 "Deck": 1,
+//                 "Currency": "INR",
+//                 "Price": 1300.0
+//               },
+//               {
+//                 "AirlineCode": "6E",
+//                 "FlightNumber": "1502",
+//                 "CraftType": "A320-186",
+//                 "Origin": "FJR",
+//                 "Destination": "BOM",
+//                 "AvailablityType": 1,
+//                 "Description": 2,
+//                 "Code": "6A",
+//                 "RowNo": "6",
+//                 "SeatNo": "A",
+//                 "SeatType": 1,
+//                 "SeatWayType": 1,
+//                 "Compartment": 1,
+//                 "Deck": 1,
+//                 "Currency": "INR",
+//                 "Price": 550.0
+//               },
+//               {
+//                 "AirlineCode": "6E",
+//                 "FlightNumber": "301",
+//                 "CraftType": "A321-220",
+//                 "Origin": "BOM",
+//                 "Destination": "DEL",
+//                 "AvailablityType": 1,
+//                 "Description": 2,
+//                 "Code": "6A",
+//                 "RowNo": "6",
+//                 "SeatNo": "A",
+//                 "SeatType": 1,
+//                 "SeatWayType": 1,
+//                 "Compartment": 2,
+//                 "Deck": 1,
+//                 "Currency": "INR",
+//                 "Price": 730.0
+//               }
+//             ],
+//             "Ssr": [],
+//             "Ticket": {
+//               "TicketId": 2392953,
+//               "TicketNumber": "MRYTFC",
+//               "IssueDate": "2026-03-25T15:49:48",
+//               "ValidatingAirline": "708",
+//               "Remarks": "",
+//               "ServiceFeeDisplayType": "ShowInTax",
+//               "Status": "OK",
+//               "ConjunctionNumber": "",
+//               "TicketType": "N"
+//             },
+//             "SegmentAdditionalInfo": [
+//               {
+//                 "FareBasis": "Q0INTRT",
+//                 "NVA": "",
+//                 "NVB": "",
+//                 "Baggage": "30 Kg|3",
+//                 "Meal": "1 Platter",
+//                 "Seat": "6A",
+//                 "SpecialService": "",
+//                 "CabinBaggage": "7 Kg"
+//               },
+//               {
+//                 "FareBasis": "Q0INTRT",
+//                 "NVA": "",
+//                 "NVB": "",
+//                 "Baggage": "30 Kg|5",
+//                 "Meal": "0 Platter",
+//                 "Seat": "6A",
+//                 "SpecialService": "",
+//                 "CabinBaggage": "7 Kg"
+//               },
+//               {
+//                 "FareBasis": "Q0INTRT",
+//                 "NVA": "",
+//                 "NVB": "",
+//                 "Baggage": "30 Kilograms|5",
+//                 "Meal": "1 Platter",
+//                 "Seat": "6A",
+//                 "SpecialService": "",
+//                 "CabinBaggage": "7 KG"
+//               }
+//             ]
+//           }
+//         ],
+//         "CancellationCharges": null,
+//         "Segments": [
+//           {
+//             "Baggage": "30 Kilograms",
+//             "CabinBaggage": "7 KG",
+//             "CabinClass": 2,
+//             "SupplierFareClass": null,
+//             "TripIndicator": 1,
+//             "SegmentIndicator": 1,
+//             "Airline": {
+//               "AirlineCode": "6E",
+//               "AirlineName": "IndiGo",
+//               "FlightNumber": "1463",
+//               "FareClass": "QN",
+//               "OperatingCarrier": ""
+//             },
+//             "AirlinePNR": "",
+//             "Origin": {
+//               "Airport": {
+//                 "AirportCode": "DEL",
+//                 "AirportName": "Indira Gandhi Airport",
+//                 "Terminal": "3",
+//                 "CityCode": "DEL",
+//                 "CityName": "Delhi",
+//                 "CountryCode": "IN",
+//                 "CountryName": "India"
+//               },
+//               "DepTime": "2026-04-28T19:10:00"
+//             },
+//             "Destination": {
+//               "Airport": {
+//                 "AirportCode": "DXB",
+//                 "AirportName": "Dubai",
+//                 "Terminal": "1",
+//                 "CityCode": "DXB",
+//                 "CityName": "Dubai",
+//                 "CountryCode": "AE",
+//                 "CountryName": "United Arab Emirates"
+//               },
+//               "ArrTime": "2026-04-28T21:20:00"
+//             },
+//             "Duration": 220,
+//             "GroundTime": 0,
+//             "Mile": 0,
+//             "StopOver": false,
+//             "FlightInfoIndex": "1",
+//             "StopPoint": "",
+//             "StopPointArrivalTime": "0001-01-01T00:00:00",
+//             "StopPointDepartureTime": "0001-01-01T00:00:00",
+//             "Craft": "321",
+//             "Remark": "Return Special",
+//             "IsETicketEligible": true,
+//             "FlightStatus": "Confirmed",
+//             "Status": "HK",
+//             "FareClassification": {
+//               "Color": "rgb(182,215,228)",
+//               "Type": "Return Special"
+//             }
+//           },
+//           {
+//             "Baggage": "30 Kilograms",
+//             "CabinBaggage": "7 KG",
+//             "CabinClass": 2,
+//             "SupplierFareClass": null,
+//             "TripIndicator": 2,
+//             "SegmentIndicator": 1,
+//             "Airline": {
+//               "AirlineCode": "6E",
+//               "AirlineName": "IndiGo",
+//               "FlightNumber": "1502",
+//               "FareClass": "QN",
+//               "OperatingCarrier": ""
+//             },
+//             "AirlinePNR": "",
+//             "Origin": {
+//               "Airport": {
+//                 "AirportCode": "FJR",
+//                 "AirportName": "Fujairah Int'l",
+//                 "Terminal": "",
+//                 "CityCode": "FJR",
+//                 "CityName": "Al Fujairah",
+//                 "CountryCode": "AE",
+//                 "CountryName": "United Arab Emirates"
+//               },
+//               "DepTime": "2026-04-30T00:35:00"
+//             },
+//             "Destination": {
+//               "Airport": {
+//                 "AirportCode": "BOM",
+//                 "AirportName": "Chhatrapati Shivaji International Airport",
+//                 "Terminal": "2",
+//                 "CityCode": "BOM",
+//                 "CityName": "Mumbai",
+//                 "CountryCode": "IN",
+//                 "CountryName": "India"
+//               },
+//               "ArrTime": "2026-04-30T05:20:00"
+//             },
+//             "Duration": 195,
+//             "GroundTime": 0,
+//             "Mile": 0,
+//             "StopOver": false,
+//             "FlightInfoIndex": "3",
+//             "StopPoint": "",
+//             "StopPointArrivalTime": "0001-01-01T00:00:00",
+//             "StopPointDepartureTime": "0001-01-01T00:00:00",
+//             "Craft": "320",
+//             "Remark": "Return Special",
+//             "IsETicketEligible": true,
+//             "FlightStatus": "Confirmed",
+//             "Status": "HK",
+//             "FareClassification": {
+//               "Color": "rgb(182,215,228)",
+//               "Type": "Return Special"
+//             }
+//           },
+//           {
+//             "Baggage": "30 Kilograms",
+//             "CabinBaggage": "7 KG",
+//             "CabinClass": 2,
+//             "SupplierFareClass": null,
+//             "TripIndicator": 2,
+//             "SegmentIndicator": 2,
+//             "Airline": {
+//               "AirlineCode": "6E",
+//               "AirlineName": "IndiGo",
+//               "FlightNumber": "301",
+//               "FareClass": "RN",
+//               "OperatingCarrier": ""
+//             },
+//             "AirlinePNR": "",
+//             "Origin": {
+//               "Airport": {
+//                 "AirportCode": "BOM",
+//                 "AirportName": "Chhatrapati Shivaji International Airport",
+//                 "Terminal": "2",
+//                 "CityCode": "BOM",
+//                 "CityName": "Mumbai",
+//                 "CountryCode": "IN",
+//                 "CountryName": "India"
+//               },
+//               "DepTime": "2026-04-30T07:00:00"
+//             },
+//             "Destination": {
+//               "Airport": {
+//                 "AirportCode": "DEL",
+//                 "AirportName": "Indira Gandhi Airport",
+//                 "Terminal": "1",
+//                 "CityCode": "DEL",
+//                 "CityName": "Delhi",
+//                 "CountryCode": "IN",
+//                 "CountryName": "India"
+//               },
+//               "ArrTime": "2026-04-30T09:10:00"
+//             },
+//             "AccumulatedDuration": 425,
+//             "Duration": 130,
+//             "GroundTime": 100,
+//             "Mile": 0,
+//             "StopOver": false,
+//             "FlightInfoIndex": "4",
+//             "StopPoint": "",
+//             "StopPointArrivalTime": "0001-01-01T00:00:00",
+//             "StopPointDepartureTime": "0001-01-01T00:00:00",
+//             "Craft": "321",
+//             "Remark": "Return Special",
+//             "IsETicketEligible": true,
+//             "FlightStatus": "Confirmed",
+//             "Status": "HK",
+//             "FareClassification": {
+//               "Color": "rgb(182,215,228)",
+//               "Type": "Return Special"
+//             }
+//           }
+//         ],
+//         "FareRules": [
+//           {
+//             "Origin": "DEL",
+//             "Destination": "DXB",
+//             "Airline": "6E",
+//             "FareBasisCode": "Q0INTRT",
+//             "FareRuleDetail": "The FareBasisCode is: Q0INTRT<br /><p>Please <a target=\"_blank\" href=\"https://www.goindigo.in/information/fees-and-charges.html?linkNav=fees-and-charges_header\" style=\"font-weight: bold;\">click here</a> for FareRules Details</p><br/> <br/><ul><li>GST, RAF AND ANY OTHER APPLICABLE CHARGES ARE EXTRA.</li><li>FEES ARE INDICATIVE PER PAX AND PER SECTOR.</li><li>FOR DOMESTIC BOOKINGS, PASSENGERS MUST SUBMIT THE CANCELLATION OR REISSUE REQUEST AT LEAST 2 HOURS BEFORE THE TIME LIMIT DEFINED IN THE AIRLINE's POLICY.</li><li>FOR INTERNATIONAL BOOKINGS, PASSENGERS MUST SUBMIT THE CANCELLATION OR REISSUE REQUEST AT LEAST 4 HOURS BEFORE THE TIME LIMIT DEFINED IN THE AIRLINE's POLICY.</li></ul>",
+//             "FareRestriction": null,
+//             "FareInclusions": [
+//               ""
+//             ]
+//           },
+//           {
+//             "Origin": "FJR",
+//             "Destination": "BOM",
+//             "Airline": "6E",
+//             "FareBasisCode": "Q0INTRT",
+//             "FareRuleDetail": "Please refer above<br/> <br/>",
+//             "FareRestriction": null,
+//             "FareInclusions": [
+//               "Please refer above."
+//             ]
+//           },
+//           {
+//             "Origin": "BOM",
+//             "Destination": "DEL",
+//             "Airline": "6E",
+//             "FareBasisCode": "R0IPRT",
+//             "FareRuleDetail": "The FareBasisCode is: R0IPRT<br /><p>Please <a target=\"_blank\" href=\"https://www.goindigo.in/information/fees-and-charges.html?linkNav=fees-and-charges_header\" style=\"font-weight: bold;\">click here</a> for FareRules Details</p><br/> <br/><ul><li>GST, RAF AND ANY OTHER APPLICABLE CHARGES ARE EXTRA.</li><li>FEES ARE INDICATIVE PER PAX AND PER SECTOR.</li><li>FOR DOMESTIC BOOKINGS, PASSENGERS MUST SUBMIT THE CANCELLATION OR REISSUE REQUEST AT LEAST 2 HOURS BEFORE THE TIME LIMIT DEFINED IN THE AIRLINE's POLICY.</li><li>FOR INTERNATIONAL BOOKINGS, PASSENGERS MUST SUBMIT THE CANCELLATION OR REISSUE REQUEST AT LEAST 4 HOURS BEFORE THE TIME LIMIT DEFINED IN THE AIRLINE's POLICY.</li></ul>",
+//             "FareRestriction": null,
+//             "FareInclusions": [
+//               ""
+//             ]
+//           }
+//         ],
+//         "MiniFareRules": [
+//           {
+//             "CFARExcludedDetails": null,
+//             "JourneyPoints": "",
+//             "Type": "",
+//             "From": "",
+//             "To": "",
+//             "Unit": "",
+//             "Details": "",
+//             "OnlineReissueAllowed": false,
+//             "OnlineRefundAllowed": false
+//           }
+//         ],
+//         "PenaltyCharges": {},
+//         "Status": 5,
+//         "Invoice": [
+//           {
+//             "CreditNoteGSTIN": null,
+//             "GSTIN": null,
+//             "InvoiceCreatedOn": "2026-03-25T15:49:48",
+//             "InvoiceId": 29654,
+//             "InvoiceNo": "IW/2526/29654",
+//             "InvoiceAmount": 43230.0,
+//             "Remarks": "",
+//             "InvoiceStatus": 3
+//           }
+//         ],
+//         "InvoiceAmount": 43230.0,
+//         "InvoiceNo": "IW/2526/29654",
+//         "InvoiceStatus": 3,
+//         "InvoiceCreatedOn": "2026-03-25T15:49:48",
+//         "Remarks": "",
+//         "IsWebCheckInAllowed": false
+//       },
+//       "TicketStatus": 1
+//     }
+//   }
+// }

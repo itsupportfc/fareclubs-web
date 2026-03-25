@@ -16,6 +16,7 @@ export default function FareSummary({
     mealTotal,
     bagTotal,
     ssrTotal,
+    showFareBreakdown = true, // false for international return (clubbed fare)
 }) {
     const outBaseFare = outboundFare?.baseFare || 0;
     const outTaxes = outboundFare?.taxes || 0;
@@ -74,15 +75,19 @@ export default function FareSummary({
                 </div>
 
                 {/* Per-flight breakdown for roundtrip */}
-                {returnFare && (
+                {returnFare && showFareBreakdown && (
                     <div className="bg-gray-50 rounded-lg p-3 space-y-1.5 text-xs text-gray-600">
                         <div className="flex justify-between">
                             <span>Outbound</span>
-                            <span>₹{currencyFmt(outboundFare?.totalPrice || 0)}</span>
+                            <span>
+                                ₹{currencyFmt(outboundFare?.totalPrice || 0)}
+                            </span>
                         </div>
                         <div className="flex justify-between">
                             <span>Return</span>
-                            <span>₹{currencyFmt(returnFare?.totalPrice || 0)}</span>
+                            <span>
+                                ₹{currencyFmt(returnFare?.totalPrice || 0)}
+                            </span>
                         </div>
                     </div>
                 )}
@@ -104,7 +109,8 @@ export default function FareSummary({
                         {mealTotal > 0 && (
                             <div className="flex justify-between text-xs text-green-800">
                                 <span className="flex items-center gap-1">
-                                    <UtensilsCrossed className="w-3.5 h-3.5" /> Meals
+                                    <UtensilsCrossed className="w-3.5 h-3.5" />{" "}
+                                    Meals
                                 </span>
                                 <span>₹{currencyFmt(mealTotal)}</span>
                             </div>
@@ -129,7 +135,9 @@ export default function FareSummary({
                 {/* Grand Total */}
                 <div className="border-t border-dashed border-gray-200 pt-3">
                     <div className="flex justify-between items-center">
-                        <span className="font-bold text-gray-900">Grand Total</span>
+                        <span className="font-bold text-gray-900">
+                            Grand Total
+                        </span>
                         <span className="font-display text-xl font-extrabold bg-gradient-to-r from-[#FF2E57] to-[#FF6B35] bg-clip-text text-transparent">
                             ₹{currencyFmt(grandTotal)}
                         </span>

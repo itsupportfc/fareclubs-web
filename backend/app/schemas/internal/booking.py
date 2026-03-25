@@ -8,6 +8,8 @@ Frontend-facing schemas for the 2-step booking flow:
 
 from typing import Literal
 
+from pydantic import model_validator
+
 from app.schemas.internal.base import InternalBaseSchema
 
 
@@ -80,7 +82,16 @@ class PassengerInfo(InternalBaseSchema):
     gst: GstInfo | None = None
 
     fare: PassengerFareInfo
-    ssr: SsrSelection | None = None
+    ssr: SsrSelection | None = None  # DEPRECATED — backward compat only
+    ssr_segments_outbound: list[SsrSelection | None] | None = None
+    ssr_segments_inbound: list[SsrSelection | None] | None = None
+
+    @model_validator(mode="after")
+    def normalize_ssr(self):
+        """Backward compat: if old `ssr` field sent, treat as single outbound segment."""
+        if not self.ssr_segments_outbound and self.ssr:
+            self.ssr_segments_outbound = [self.ssr]
+        return self
 
 
 # ==============================================================================
