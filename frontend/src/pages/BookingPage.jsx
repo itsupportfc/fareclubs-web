@@ -910,6 +910,57 @@ export default function BookingPage() {
                                 </div>
                             )}
 
+                            {/* Session countdown warning - last 5 minutes */}
+                            {showSessionWarning && (
+                                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm mb-4">
+                                    <div className="flex items-start gap-2">
+                                        <span className="text-amber-500 mt-0.5">
+                                            &#9201;
+                                        </span>
+                                        <div>
+                                            <p className="font-semibold text-amber-800">
+                                                Session expires in{" "}
+                                                {Math.floor(secondsLeft / 60)}:
+                                                {String(
+                                                    secondsLeft % 60,
+                                                ).padStart(2, "0")}
+                                            </p>
+                                            <p className="text-amber-700 mt-0.5">
+                                                Please complete your booking
+                                                soon.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Session expired — search again */}
+                            {sessionExpired && (
+                                <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm mb-4">
+                                    <div className="flex items-start gap-2">
+                                        <span className="text-red-500 mt-0.5">
+                                            &#9888;
+                                        </span>
+                                        <div>
+                                            <p className="font-semibold text-red-800">
+                                                Session expired
+                                            </p>
+                                            <p className="text-red-700 mt-0.5">
+                                                Your search session has timed
+                                                out. Please search again to get
+                                                updated fares.
+                                            </p>
+                                            <button
+                                                onClick={() => navigate("/")}
+                                                className="mt-2 px-4 py-1.5 bg-red-600 text-white text-xs font-semibold rounded-lg hover:bg-red-700 transition"
+                                            >
+                                                Search Again
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
                             <button
                                 disabled={
                                     !travellersComplete ||

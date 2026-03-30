@@ -53,7 +53,11 @@ export default function FlightPriceCard({ flight, onViewFares = () => {} }) {
 
   if (!flight || !lowestFare) return null;
 
+<<<<<<< HEAD
   const fareId = lowestFare.fareId;
+=======
+  const fareId = lowestFare.FareId;
+>>>>>>> f53e023 (save local changes)
   const segments = lowestFare.segments?.flat() || [];
   if (!segments.length) return null;
 
