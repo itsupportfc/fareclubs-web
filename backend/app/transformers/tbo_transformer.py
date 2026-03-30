@@ -55,7 +55,12 @@ from app.schemas.tbo.common import (
     SeatDynamic,
     SimpleMeal,
 )
-from app.schemas.tbo.enums import BaggageDescriptionEnum, FlightCabinClass, JourneyType, SeatAvailabilityTypeEnum
+from app.schemas.tbo.enums import (
+    BaggageDescriptionEnum,
+    FlightCabinClass,
+    JourneyType,
+    SeatAvailabilityTypeEnum,
+)
 from app.schemas.tbo.enums import PassengerType as TBOPassengerType
 from app.schemas.tbo.fare_quote import TBOFareQuoteResponse
 from app.schemas.tbo.fare_rule import TBOFareRuleRequest, TBOFareRuleResponse
@@ -416,7 +421,9 @@ class TBOTransformer:
 
             # Determine SSR segments for this direction
             if request.is_international_return:
-                ssr_segments = (p.ssr_segments_outbound or []) + (p.ssr_segments_inbound or [])
+                ssr_segments = (p.ssr_segments_outbound or []) + (
+                    p.ssr_segments_inbound or []
+                )
             elif direction == "inbound":
                 ssr_segments = p.ssr_segments_inbound or []
             else:
@@ -435,7 +442,9 @@ class TBOTransformer:
                         Code=first_ssr.seat_code, Description=2
                     )
                 if first_ssr.baggage_code:
-                    baggage = BaggageSelection(Code=first_ssr.baggage_code, Description=2)
+                    baggage = BaggageSelection(
+                        Code=first_ssr.baggage_code, Description=2
+                    )
 
             # Auto-assign free SSR if user didn't select
             if not meal and free_ssr["free_meal_code"]:
@@ -531,12 +540,15 @@ class TBOTransformer:
                                         if (
                                             seat.Code
                                             and seat.Code != "NoSeat"
-                                            and seat.AvailablityType == SeatAvailabilityTypeEnum.AVAILABLE
+                                            and seat.AvailablityType
+                                            == SeatAvailabilityTypeEnum.AVAILABLE
                                         ):
                                             seg_seats[seat.Code] = seat
                             seat_maps.append(seg_seats)
                             if reference_seat:
-                                segment_keys.append((reference_seat.Origin, reference_seat.FlightNumber))
+                                segment_keys.append(
+                                    (reference_seat.Origin, reference_seat.FlightNumber)
+                                )
                                 no_seat_list.append(
                                     Seat(
                                         AirlineCode=reference_seat.AirlineCode,
@@ -631,7 +643,9 @@ class TBOTransformer:
 
             # Determine SSR segments for this passenger based on direction
             if request.is_international_return:
-                ssr_segments = (p.ssr_segments_outbound or []) + (p.ssr_segments_inbound or [])
+                ssr_segments = (p.ssr_segments_outbound or []) + (
+                    p.ssr_segments_inbound or []
+                )
             elif direction == "inbound":
                 ssr_segments = p.ssr_segments_inbound or []
             else:
@@ -647,7 +661,9 @@ class TBOTransformer:
 
                 # Baggage
                 if seg_ssr and seg_ssr.baggage_code:
-                    bag_map = baggage_maps[seg_idx] if seg_idx < len(baggage_maps) else {}
+                    bag_map = (
+                        baggage_maps[seg_idx] if seg_idx < len(baggage_maps) else {}
+                    )
                     if seg_ssr.baggage_code in bag_map:
                         baggage_list.append(bag_map[seg_ssr.baggage_code])
 
@@ -1108,7 +1124,8 @@ class TBOTransformer:
                             name=seg.Airline.AirlineName or seg.Airline.AirlineCode,
                         ),
                         flight_number=seg.Airline.FlightNumber,
-                        operating_carrier=seg.Airline.AirlineName or seg.Airline.AirlineCode,
+                        operating_carrier=seg.Airline.AirlineName
+                        or seg.Airline.AirlineCode,
                         aircraft=seg.Craft or None,
                         duration_minutes=seg.Duration,
                         layover_minutes=seg.GroundTime,
