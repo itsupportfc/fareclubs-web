@@ -31,17 +31,27 @@ export default function FlightPriceCard({ flight, onViewFares = () => {} }) {
   const [activeTab, setActiveTab] = useState("FLIGHT");
   const [fetchedFareId, setFetchedFareId] = useState(null);
 
-  if (!flight || !flight.fares?.length) return null;
+  /* ---------- STORE HOOKS (must be above any early return) ---------- */
+  const getFareRules = useFlightStore((s) => s.getFareRules);
+  const getFareQuote = useFlightStore((s) => s.getFareQuote);
+  const fareData = useFlightStore((s) => s.fareData);
+  const isFareLoading = useFlightStore((s) => s.isFareLoading);
+  const fareError = useFlightStore((s) => s.fareError);
+  const setSelectedFlight = useFlightStore((s) => s.setSelectedFlight);
 
   /* ---------- LOWEST FARE ---------- */
   const lowestFare = useMemo(
     () =>
-      flight.fares.reduce(
-        (min, f) => (f.totalPrice < min.totalPrice ? f : min),
-        flight.fares[0]
-      ),
-    [flight.fares]
+      flight?.fares?.length
+        ? flight.fares.reduce(
+            (min, f) => (f.totalPrice < min.totalPrice ? f : min),
+            flight.fares[0]
+          )
+        : null,
+    [flight?.fares]
   );
+
+  if (!flight || !lowestFare) return null;
 
   const fareId = lowestFare.FareId;
   const segments = lowestFare.segments?.flat() || [];
@@ -72,14 +82,7 @@ export default function FlightPriceCard({ flight, onViewFares = () => {} }) {
     };
   });
 
-  /* ---------- STORE HOOKS ---------- */
-  const getFareRules = useFlightStore((s) => s.getFareRules);
-  const getFareQuote = useFlightStore((s) => s.getFareQuote);
-  const fareData = useFlightStore((s) => s.fareData);
-  const isFareLoading = useFlightStore((s) => s.isFareLoading);
-  const fareError = useFlightStore((s) => s.fareError);
 
-  const setSelectedFlight = useFlightStore((s) => s.setSelectedFlight);
 
   const fareRules = fareData[fareId]?.fareRules;
   const fareQuote = fareData[fareId]?.fareQuote;
@@ -252,7 +255,13 @@ export default function FlightPriceCard({ flight, onViewFares = () => {} }) {
                 return (
                   <div key={idx}>
                     <div className="bg-white border border-gray-100 rounded-xl p-3 flex gap-4">
+                      <img
+            src={`https://pics.avs.io/60/60/${airlineCode}.png`}
+            alt={airlineName}
+            className="w-10 h-10 object-contain"
+          />
                       <div className="min-w-[160px]">
+                        
                         <p className="font-semibold">
                           {seg.carrier.name}
                         </p>
@@ -289,10 +298,9 @@ export default function FlightPriceCard({ flight, onViewFares = () => {} }) {
                     </div>
 
                     {layoverMins > 0 && (
-                      <div className="text-center text-xs font-semibold text-orange-600 my-2">
-                        Layover at {seg.destination} •{" "}
-                        {formatDuration(layoverMins)}
-                      </div>
+            <div className="text-center text-xs font-semibold text-orange-600 my-2">
+  Layover at {seg.stopAirports?.join(", ")} • {formatDuration(layoverMins)}
+</div>
                     )}
                   </div>
                 );

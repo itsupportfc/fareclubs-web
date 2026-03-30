@@ -11,7 +11,7 @@ const Dashboard = () => {
       <Navbar />
 
       {/* 🔍 Search Section */}
-      <main className="flex-grow container   ">
+      <main className="flex-grow w-full   ">
         <SearchPanel />
 
         {/* 🪪 Cards Section */}

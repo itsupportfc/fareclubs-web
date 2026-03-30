@@ -35,9 +35,18 @@ const useFlightStore = create((set, get) => ({
   travelClass: "Economy",
   tripType: "oneway",
 
+  // 🎛️ Filters
+  filters: {
+    nonStop: false,
+    oneStop: false,
+    timeSlots: {},
+    airlines: [],
+  },
+
   // 📦 Results
   outboundFlights: [],
   inboundFlights: [],
+  availableAirlines : [],
   isInternationalReturn: false,
 
   // ⏳ Loading
@@ -69,6 +78,14 @@ const useFlightStore = create((set, get) => ({
   setTravelClass: (travelClass) => set({ travelClass }),
   setTripType: (tripType) => set({ tripType }),
 
+  setFilters: (newFilters) =>
+    set((state) => ({
+      filters: {
+        ...state.filters,
+        ...newFilters,
+      },
+    })),
+
   // ===============================
   // 🔄 Flight Cache Methods
   // ===============================
@@ -87,28 +104,22 @@ const useFlightStore = create((set, get) => ({
   },
 
   // ===============================
-  // 🧠 Common Cache Helpers (NEW)
+  // 🧠 Common Cache Helpers
   // ===============================
-  setSelectedFlight: (flight) =>
-    get().setCache("selectedFlight", flight),
+  setSelectedFlight: (flight) => get().setCache("selectedFlight", flight),
 
-  getSelectedFlight: () =>
-    get().getCache("selectedFlight"),
+  getSelectedFlight: () => get().getCache("selectedFlight"),
 
-  setSelectedFare: (fare) =>
-    get().setCache("selectedFare", fare),
+  setSelectedFare: (fare) => get().setCache("selectedFare", fare),
 
-  getSelectedFare: () =>
-    get().getCache("selectedFare"),
+  getSelectedFare: () => get().getCache("selectedFare"),
 
-  setSearchResults: (data) =>
-    get().setCache("searchResults", data),
+  setSearchResults: (data) => get().setCache("searchResults", data),
 
-  getSearchResults: () =>
-    get().getCache("searchResults"),
+  getSearchResults: () => get().getCache("searchResults"),
 
   // ===============================
-  // 🧳 Booking Layer (NEW)
+  // 🧳 Booking Layer
   // ===============================
   selectedOutbound: null,
   selectedInbound: null,
@@ -177,10 +188,11 @@ const useFlightStore = create((set, get) => ({
       const inboundFlights = Array.isArray(data?.inboundFlights)
         ? data.inboundFlights
         : [];
-
+      const availableAirlines = Array.isArray(data?.availableAirlines) ? data.availableAirlines : [];
       set({
         outboundFlights,
         inboundFlights,
+        availableAirlines,
         isInternationalReturn: data?.isInternationalReturn || false,
         isLoading: false,
         error:
@@ -189,7 +201,6 @@ const useFlightStore = create((set, get) => ({
             : null,
       });
 
-      // ✅ cache search response
       get().setSearchResults({
         outboundFlights,
         inboundFlights,
@@ -211,7 +222,7 @@ const useFlightStore = create((set, get) => ({
         isLoading: false,
         error: err.message || "Failed to search flights",
       });
-      console.error("❌ Search Flights Error:", err);
+      console.error("Search Flights Error:", err);
       return false;
     }
   },
@@ -225,7 +236,14 @@ const useFlightStore = create((set, get) => ({
     set({ isFareLoading: true, fareError: null });
 
     try {
-      const payload = { fareId, initialPrice };
+      // Map to the shape getFareQuoteAPI expects
+      const payload = {
+        tripType: "oneway",
+        fareIdOutbound: fareId,
+        initialPriceOutbound: initialPrice,
+        fareIdInbound: null,
+        initialPriceInbound: null,
+      };
       const response = await getFareQuoteAPI(payload);
 
       set((state) => ({
@@ -291,6 +309,12 @@ const useFlightStore = create((set, get) => ({
       infants: 0,
       travelClass: "Economy",
       tripType: "oneway",
+      filters: {
+        nonStop: false,
+        oneStop: false,
+        timeSlots: {},
+        airlines: [],
+      },
       outboundFlights: [],
       inboundFlights: [],
       isInternationalReturn: false,
@@ -299,7 +323,6 @@ const useFlightStore = create((set, get) => ({
       fareData: {},
       fareError: null,
       flightCache: {},
-      // reset booking state
       selectedOutbound: null,
       selectedInbound: null,
       fareSnapshot: null,
