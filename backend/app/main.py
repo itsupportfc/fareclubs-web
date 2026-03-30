@@ -1,9 +1,8 @@
-from contextlib import asynccontextmanager
 import logging
+from contextlib import asynccontextmanager
 
 from app.api.v1 import airports, auth, flight, flight_booking
 from app.clients.exceptions import ExternalProviderError
-from app.config import settings
 from app.core.http_logging import RequestResponseLoggingMiddleware
 from app.core.logging import setup_logging
 from app.utils.cache import FlightCache, flight_cache, get_flight_cache

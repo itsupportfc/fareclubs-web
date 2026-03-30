@@ -9,6 +9,7 @@ import FlightPriceCard from "../components/search/FlightPriceCard";
 import Offers from "../components/search/Offers";
 import LoaderOverlay from "../components/common/LoaderOverlay";
 import FareModal from "../components/search/FareModal";
+import { filterFlights } from "../utils/flightFilters";
 
 const getDepartureHour = (flight) => {
   const depTime =
@@ -67,12 +68,7 @@ export default function FlightResultsPage() {
     children,
     infants,
     isLoading,
-    filters = {
-      nonStop: false,
-      oneStop: false,
-      timeSlots: {},
-      airlines: [],
-    },
+    filters = {},
     setCache,
   } = useFlightStore();
 
@@ -86,34 +82,10 @@ export default function FlightResultsPage() {
     }
   };
 
-  const filteredFlights = useMemo(() => {
-    const selectedAirlines = filters?.airlines || [];
-    const activeTimeSlots = Object.keys(filters?.timeSlots || {}).filter(
-      (key) => filters.timeSlots[key]
-    );
-
-    return outboundFlights.filter((flight) => {
-      const stops = getStopsCount(flight);
-      const airlineName = getAirlineName(flight);
-      const depHour = getDepartureHour(flight);
-
-      if (filters?.nonStop && stops !== 0) return false;
-      if (filters?.oneStop && stops !== 1) return false;
-
-      if (
-        selectedAirlines.length > 0 &&
-        !selectedAirlines.includes(airlineName)
-      ) {
-        return false;
-      }
-
-      if (!matchesTimeSlot(depHour, activeTimeSlots)) {
-        return false;
-      }
-
-      return true;
-    });
-  }, [outboundFlights, filters]);
+  const filteredFlights = useMemo(
+    () => filterFlights(outboundFlights, filters.outbound, filters.maxPrice),
+    [outboundFlights, filters]
+  );
 
   if (isLoading) return <LoaderOverlay />;
 

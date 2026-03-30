@@ -117,92 +117,6 @@ function DetailCell({ label, value }) {
   );
 }
 
-function FlightLegCard({ leg, baggageInfo }) {
-  const dep = leg.departure || {};
-  const arr = leg.arrival || {};
-  const carrier = leg.carrier || {};
-
-  return (
-    <div className="rounded-2xl border border-gray-100 p-4 sm:p-5 bg-white">
-      <div className="flex flex-wrap items-center gap-2 mb-4">
-        <span className="text-xs font-bold text-gray-900 bg-gray-100 px-2.5 py-1 rounded-md">
-          {carrier.code || "--"} {leg.flightNumber || "--"}
-        </span>
-        <span className="text-xs text-gray-500">{carrier.name || ""}</span>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] gap-5 items-center">
-        <div>
-          <p className="font-display text-2xl font-bold text-gray-900">
-            {formatTime(dep.time || leg.departureTime)}
-          </p>
-          <p className="text-sm font-semibold text-gray-700 mt-1">
-            {dep.code || dep.city || "--"}
-          </p>
-          <p className="text-xs text-gray-400 mt-1">
-            {dep.name || ""} {dep.terminal ? `T${dep.terminal}` : ""}
-          </p>
-          <p className="text-xs text-gray-400 mt-1">
-            {formatDate(dep.time || leg.departureTime)}
-          </p>
-        </div>
-
-        <div className="flex flex-col items-center gap-2 min-w-[110px]">
-          {leg.durationMinutes && (
-            <span className="text-[11px] text-gray-400 font-medium">
-              {Math.floor(leg.durationMinutes / 60)}h {leg.durationMinutes % 60}m
-            </span>
-          )}
-          <div className="flex items-center gap-2 w-full">
-            <div className="h-px flex-1 bg-gray-300" />
-            <Plane className="w-3.5 h-3.5 text-gray-400 rotate-90" />
-            <div className="h-px flex-1 bg-gray-300" />
-          </div>
-        </div>
-
-        <div className="md:text-right">
-          <p className="font-display text-2xl font-bold text-gray-900">
-            {formatTime(arr.time || leg.arrivalTime)}
-          </p>
-          <p className="text-sm font-semibold text-gray-700 mt-1">
-            {arr.code || arr.city || "--"}
-          </p>
-          <p className="text-xs text-gray-400 mt-1">
-            {arr.name || ""} {arr.terminal ? `T${arr.terminal}` : ""}
-          </p>
-          <p className="text-xs text-gray-400 mt-1">
-            {formatDate(arr.time || leg.arrivalTime)}
-          </p>
-        </div>
-      </div>
-
-      {(baggageInfo || leg.checkedBaggage || leg.cabinBaggage) && (
-        <div className="mt-4 flex flex-wrap gap-2.5">
-          {(baggageInfo?.baggage || leg.checkedBaggage) && (
-            <span className="inline-flex items-center gap-1.5 text-xs text-gray-600 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-100">
-              <Luggage className="w-3 h-3" />
-              Check-in: {baggageInfo?.baggage || leg.checkedBaggage}
-            </span>
-          )}
-
-          {(baggageInfo?.cabinBaggage || leg.cabinBaggage) && (
-            <span className="inline-flex items-center gap-1.5 text-xs text-gray-600 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-100">
-              <Luggage className="w-3 h-3" />
-              Cabin: {baggageInfo?.cabinBaggage || leg.cabinBaggage}
-            </span>
-          )}
-
-          {baggageInfo?.meal && (
-            <span className="inline-flex items-center gap-1.5 text-xs text-gray-600 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-100">
-              🍽 Meal: {baggageInfo.meal}
-            </span>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
 export default function BookingConfirmationPage() {
   const { state } = useLocation();
   const navigate = useNavigate();
@@ -289,14 +203,19 @@ export default function BookingConfirmationPage() {
         }
       : null);
 
+  const primaryLeg = outboundLeg || inboundLeg;
+
   const displayPnr = outboundLeg?.providerPnr ?? booking.pnr ?? "PENDING";
-  const displayInboundPnr = inboundLeg?.providerPnr ?? booking.pnrInbound ?? null;
+  const displayInboundPnr =
+    inboundLeg?.providerPnr ?? booking.pnrInbound ?? null;
 
   const displayBookingId =
     outboundLeg?.bookingRecordId ?? booking.bookingId ?? "--";
   const displayInboundBookingId =
     inboundLeg?.bookingRecordId ?? booking.bookingIdInbound ?? null;
 
+  const displayInvoiceNo =
+    outboundLeg?.invoiceNo ?? booking.invoiceNo ?? null;
   const displayInvoiceAmount =
     outboundLeg?.invoiceAmount ?? booking.invoiceAmount ?? null;
 
@@ -317,11 +236,8 @@ export default function BookingConfirmationPage() {
   const miniFareRules =
     outboundLeg?.miniFareRules ?? inboundLeg?.miniFareRules ?? [];
 
-  const outboundFlightLegs =
+  const legs =
     outboundFlight?.segments?.flatMap((s) => s.segments || [s]) || [];
-
-  const inboundFlightLegs =
-    inboundFlight?.segments?.flatMap((s) => s.segments || [s]) || [];
 
   const hasPriceOrTimeNotice = [outboundLeg, inboundLeg].some(
     (leg) => leg?.providerPriceChanged || leg?.providerTimeChanged,
@@ -472,7 +388,7 @@ export default function BookingConfirmationPage() {
               )}
             </motion.div>
 
-            {(outboundFlightLegs.length > 0 || inboundFlightLegs.length > 0) && (
+            {legs.length > 0 && (
               <motion.div
                 custom={1}
                 initial="hidden"
@@ -481,167 +397,225 @@ export default function BookingConfirmationPage() {
               >
                 <Card className="p-6">
                   <SectionTitle icon={Plane} title="Flight Details" />
-
-                  {outboundFlightLegs.length > 0 && (
-                    <div className="space-y-4">
-                      <h3 className="text-sm font-semibold text-gray-900">
-                        Outbound Flight
-                      </h3>
-
-                      {outboundFlightLegs.map((leg, i) => (
-                        <FlightLegCard
-                          key={`outbound-${i}`}
-                          leg={leg}
-                          baggageInfo={outboundLeg?.segmentBaggage?.[i] || segmentBaggage[i]}
-                        />
-                      ))}
-                    </div>
-                  )}
-
-                  {inboundFlightLegs.length > 0 && (
-                    <div className="space-y-4 mt-6">
-                      <h3 className="text-sm font-semibold text-gray-900">
-                        Return Flight
-                      </h3>
-
-                      {inboundFlightLegs.map((leg, i) => (
-                        <FlightLegCard
-                          key={`inbound-${i}`}
-                          leg={leg}
-                          baggageInfo={inboundLeg?.segmentBaggage?.[i] || null}
-                        />
-                      ))}
-                    </div>
-                  )}
-                </Card>
-              </motion.div>
-            )}
-
-            {passengers.length > 0 && (
-              <motion.div
-                custom={2}
-                initial="hidden"
-                animate="visible"
-                variants={fadeUp}
-              >
-                <Card className="p-6">
-                  <SectionTitle icon={Users} title="Passenger Details" />
-
-                  <div className="grid gap-3 sm:hidden">
-                    {passengers.map((pax, i) => {
-                      const outboundSeatDisplay =
-                        pax.outboundSeatNumbers?.filter(Boolean).join(" · ") ||
-                        pax.seatNumbers?.filter(Boolean).join(" · ") ||
-                        "--";
-
-                      const inboundSeatDisplay =
-                        pax.inboundSeatNumbers?.filter(Boolean).join(" · ") ||
-                        "--";
+                  <div className="space-y-4">
+                    {legs.map((leg, i) => {
+                      const dep = leg.departure || {};
+                      const arr = leg.arrival || {};
+                      const carrier = leg.carrier || {};
+                      const baggageInfo = segmentBaggage[i];
 
                       return (
                         <div
                           key={i}
-                          className="rounded-xl border border-gray-100 bg-gray-50 p-4"
+                          className="rounded-2xl border border-gray-100 p-4 sm:p-5 bg-white"
                         >
-                          <div className="flex items-start justify-between gap-3">
-                            <div>
-                              <p className="font-semibold text-gray-900">
-                                {pax.title} {pax.firstName} {pax.lastName}
-                              </p>
-                              <p className="text-xs text-gray-500 mt-1">
-                                {PAX_LABELS[pax.paxType] || "Adult"}
-                              </p>
-                            </div>
-                            <span className="text-xs text-gray-400">
-                              #{i + 1}
+                          <div className="flex flex-wrap items-center gap-2 mb-4">
+                            <span className="text-xs font-bold text-gray-900 bg-gray-100 px-2.5 py-1 rounded-md">
+                              {carrier.code || "--"} {leg.flightNumber || "--"}
+                            </span>
+                            <span className="text-xs text-gray-500">
+                              {carrier.name || ""}
                             </span>
                           </div>
 
-                          <div className="mt-3 space-y-1.5 text-xs text-gray-600">
-                            <p>Outbound PNR: {outboundLeg?.providerPnr || "--"}</p>
-                            <p>Outbound Seat: {outboundSeatDisplay}</p>
+                          <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] gap-5 items-center">
+                            <div>
+                              <p className="font-display text-2xl font-bold text-gray-900">
+                                {formatTime(dep.time || leg.departureTime)}
+                              </p>
+                              <p className="text-sm font-semibold text-gray-700 mt-1">
+                                {dep.code || dep.city || "--"}
+                              </p>
+                              <p className="text-xs text-gray-400 mt-1">
+                                {dep.name || ""} {dep.terminal ? `T${dep.terminal}` : ""}
+                              </p>
+                              <p className="text-xs text-gray-400 mt-1">
+                                {formatDate(dep.time || leg.departureTime)}
+                              </p>
+                            </div>
 
-                            {inboundLeg && (
-                              <>
-                                <p>Inbound PNR: {inboundLeg?.providerPnr || "--"}</p>
-                                <p>Inbound Seat: {inboundSeatDisplay}</p>
-                              </>
-                            )}
+                            <div className="flex flex-col items-center gap-2 min-w-[110px]">
+                              {leg.durationMinutes && (
+                                <span className="text-[11px] text-gray-400 font-medium">
+                                  {Math.floor(leg.durationMinutes / 60)}h{" "}
+                                  {leg.durationMinutes % 60}m
+                                </span>
+                              )}
+                              <div className="flex items-center gap-2 w-full">
+                                <div className="h-px flex-1 bg-gray-300" />
+                                <Plane className="w-3.5 h-3.5 text-gray-400 rotate-90" />
+                                <div className="h-px flex-1 bg-gray-300" />
+                              </div>
+                            </div>
 
-                            <p>Ticket: {pax.ticketNumber || "--"}</p>
+                            <div className="md:text-right">
+                              <p className="font-display text-2xl font-bold text-gray-900">
+                                {formatTime(arr.time || leg.arrivalTime)}
+                              </p>
+                              <p className="text-sm font-semibold text-gray-700 mt-1">
+                                {arr.code || arr.city || "--"}
+                              </p>
+                              <p className="text-xs text-gray-400 mt-1">
+                                {arr.name || ""} {arr.terminal ? `T${arr.terminal}` : ""}
+                              </p>
+                              <p className="text-xs text-gray-400 mt-1">
+                                {formatDate(arr.time || leg.arrivalTime)}
+                              </p>
+                            </div>
                           </div>
+
+                          {(baggageInfo || leg.checkedBaggage || leg.cabinBaggage) && (
+                            <div className="mt-4 flex flex-wrap gap-2.5">
+                              {(baggageInfo?.baggage || leg.checkedBaggage) && (
+                                <span className="inline-flex items-center gap-1.5 text-xs text-gray-600 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-100">
+                                  <Luggage className="w-3 h-3" />
+                                  Check-in: {baggageInfo?.baggage || leg.checkedBaggage}
+                                </span>
+                              )}
+
+                              {(baggageInfo?.cabinBaggage || leg.cabinBaggage) && (
+                                <span className="inline-flex items-center gap-1.5 text-xs text-gray-600 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-100">
+                                  <Luggage className="w-3 h-3" />
+                                  Cabin: {baggageInfo?.cabinBaggage || leg.cabinBaggage}
+                                </span>
+                              )}
+
+                              {baggageInfo?.meal && (
+                                <span className="inline-flex items-center gap-1.5 text-xs text-gray-600 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-100">
+                                  🍽 Meal: {baggageInfo.meal}
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </div>
                       );
                     })}
                   </div>
-
-                  <div className="hidden sm:block overflow-x-auto -mx-2">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="text-left text-xs text-gray-400 uppercase tracking-wide">
-                          <th className="px-2 pb-3 font-medium">#</th>
-                          <th className="px-2 pb-3 font-medium">Passenger</th>
-                          <th className="px-2 pb-3 font-medium">Type</th>
-                          <th className="px-2 pb-3 font-medium">PNR</th>
-                          <th className="px-2 pb-3 font-medium">Seat(s)</th>
-
-                          {inboundLeg && (
-                            <>
-                              <th className="px-2 pb-3 font-medium">Return PNR</th>
-                              <th className="px-2 pb-3 font-medium">Return Seat(s)</th>
-                            </>
-                          )}
-                        </tr>
-                      </thead>
-
-                      <tbody className="divide-y divide-gray-100">
-                        {passengers.map((pax, i) => {
-                          const outboundSeatDisplay =
-                            pax.outboundSeatNumbers?.filter(Boolean).join(" · ") ||
-                            pax.seatNumbers?.filter(Boolean).join(" · ") ||
-                            "--";
-
-                          const inboundSeatDisplay =
-                            pax.inboundSeatNumbers?.filter(Boolean).join(" · ") ||
-                            "--";
-
-                          return (
-                            <tr key={i} className="text-gray-700">
-                              <td className="px-2 py-3 text-gray-400">{i + 1}</td>
-                              <td className="px-2 py-3 font-medium">
-                                {pax.title} {pax.firstName} {pax.lastName}
-                              </td>
-                              <td className="px-2 py-3">
-                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-600">
-                                  {PAX_LABELS[pax.paxType] || "Adult"}
-                                </span>
-                              </td>
-                              <td className="px-2 py-3 font-mono text-xs text-gray-500">
-                                {outboundLeg?.providerPnr || "--"}
-                              </td>
-                              <td className="px-2 py-3 font-mono text-xs text-gray-500">
-                                {outboundSeatDisplay}
-                              </td>
-
-                              {inboundLeg && (
-                                <>
-                                  <td className="px-2 py-3 font-mono text-xs text-gray-500">
-                                    {inboundLeg?.providerPnr || "--"}
-                                  </td>
-                                  <td className="px-2 py-3 font-mono text-xs text-gray-500">
-                                    {inboundSeatDisplay}
-                                  </td>
-                                </>
-                              )}
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
                 </Card>
               </motion.div>
             )}
+
+{passengers.length > 0 && (
+  <motion.div
+    custom={2}
+    initial="hidden"
+    animate="visible"
+    variants={fadeUp}
+  >
+    <Card className="p-6">
+      <SectionTitle icon={Users} title="Passenger Details" />
+
+      <div className="grid gap-3 sm:hidden">
+        {passengers.map((pax, i) => {
+          const outboundSeatDisplay =
+            pax.outboundSeatNumbers?.filter(Boolean).join(" · ") ||
+            pax.seatNumbers?.filter(Boolean).join(" · ") ||
+            "--";
+
+          const inboundSeatDisplay =
+            pax.inboundSeatNumbers?.filter(Boolean).join(" · ") || "--";
+
+          return (
+            <div
+              key={i}
+              className="rounded-xl border border-gray-100 bg-gray-50 p-4"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="font-semibold text-gray-900">
+                    {pax.title} {pax.firstName} {pax.lastName}
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {PAX_LABELS[pax.paxType] || "Adult"}
+                  </p>
+                </div>
+                <span className="text-xs text-gray-400">#{i + 1}</span>
+              </div>
+
+              <div className="mt-3 space-y-1.5 text-xs text-gray-600">
+                <p>Outbound PNR: {outboundLeg?.providerPnr || "--"}</p>
+                <p>Outbound Seat: {outboundSeatDisplay}</p>
+
+                {inboundLeg && (
+                  <>
+                    <p>Inbound PNR: {inboundLeg?.providerPnr || "--"}</p>
+                    <p>Inbound Seat: {inboundSeatDisplay}</p>
+                  </>
+                )}
+
+                <p>Ticket: {pax.ticketNumber || "--"}</p>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="hidden sm:block overflow-x-auto -mx-2">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-left text-xs text-gray-400 uppercase tracking-wide">
+              <th className="px-2 pb-3 font-medium">#</th>
+              <th className="px-2 pb-3 font-medium">Passenger</th>
+              <th className="px-2 pb-3 font-medium">Type</th>
+              <th className="px-2 pb-3 font-medium"> PNR</th>
+              <th className="px-2 pb-3 font-medium">Seat(s)</th>
+
+              {inboundLeg && (
+                <>
+                  <th className="px-2 pb-3 font-medium">Return PNR</th>
+                  <th className="px-2 pb-3 font-medium">Return Seat(s)</th>
+                </>
+              )}
+            </tr>
+          </thead>
+
+          <tbody className="divide-y divide-gray-100">
+            {passengers.map((pax, i) => {
+              const outboundSeatDisplay =
+                pax.outboundSeatNumbers?.filter(Boolean).join(" · ") ||
+                pax.seatNumbers?.filter(Boolean).join(" · ") ||
+                "--";
+
+              const inboundSeatDisplay =
+                pax.inboundSeatNumbers?.filter(Boolean).join(" · ") || "--";
+
+              return (
+                <tr key={i} className="text-gray-700">
+                  <td className="px-2 py-3 text-gray-400">{i + 1}</td>
+                  <td className="px-2 py-3 font-medium">
+                    {pax.title} {pax.firstName} {pax.lastName}
+                  </td>
+                  <td className="px-2 py-3">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-600">
+                      {PAX_LABELS[pax.paxType] || "Adult"}
+                    </span>
+                  </td>
+                  <td className="px-2 py-3 font-mono text-xs text-gray-500">
+                    {outboundLeg?.providerPnr || "--"}
+                  </td>
+                  <td className="px-2 py-3 font-mono text-xs text-gray-500">
+                    {outboundSeatDisplay}
+                  </td>
+
+                  {inboundLeg && (
+                    <>
+                      <td className="px-2 py-3 font-mono text-xs text-gray-500">
+                        {inboundLeg?.providerPnr || "--"}
+                      </td>
+                      <td className="px-2 py-3 font-mono text-xs text-gray-500">
+                        {inboundSeatDisplay}
+                      </td>
+                    </>
+                  )}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </Card>
+  </motion.div>
+)}
 
             {(hasPriceOrTimeNotice || ssrNoticeLeg) && (
               <motion.div
@@ -655,16 +629,12 @@ export default function BookingConfirmationPage() {
                   <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-2xl p-4">
                     <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
                     <div>
-                      <p className="font-semibold text-sm text-amber-800">
-                        Notice
-                      </p>
+                      <p className="font-semibold text-sm text-amber-800">Notice</p>
                       <p className="text-sm text-amber-700 mt-0.5">
-                        {outboundLeg?.providerPriceChanged ||
-                        inboundLeg?.providerPriceChanged
+                        {outboundLeg?.providerPriceChanged || inboundLeg?.providerPriceChanged
                           ? "The fare was updated by the airline during booking. "
                           : ""}
-                        {outboundLeg?.providerTimeChanged ||
-                        inboundLeg?.providerTimeChanged
+                        {outboundLeg?.providerTimeChanged || inboundLeg?.providerTimeChanged
                           ? "The flight schedule was updated by the airline."
                           : ""}
                       </p>
@@ -770,41 +740,42 @@ export default function BookingConfirmationPage() {
                       />
                     )}
 
+                    
                     {displayInvoiceAmount != null && (
                       <DetailCell
                         label="Invoice Amount"
                         value={`₹${currencyFmt(displayInvoiceAmount)}`}
                       />
                     )}
+
+                    
                   </div>
 
                   {(isConfirmed || isPartial) && (
                     <div className="flex flex-col sm:flex-row xl:flex-col gap-3">
-                      {displayBookingId &&
-                        displayPnr &&
-                        displayPnr !== "PENDING" && (
-                          <button
-                            onClick={() =>
-                              handleDownloadEticket({
-                                bookingId: displayBookingId,
-                                pnr: displayPnr,
-                                fileLabel: displayInboundPnr
-                                  ? "Outbound_ETicket"
-                                  : "ETicket",
-                              })
-                            }
-                            disabled={downloading}
-                            type="button"
-                            className="inline-flex items-center justify-center gap-2 px-5 py-3 bg-gradient-to-r from-[#FF2E57] to-[#FF6B35] text-white rounded-xl text-sm font-semibold hover:shadow-lg hover:shadow-[#FF2E57]/20 transition-all active:scale-[0.97] disabled:opacity-60"
-                          >
-                            <Download className="w-4 h-4" />
-                            {downloading
-                              ? "Downloading..."
-                              : displayInboundPnr
-                                ? "Download Outbound E-Ticket"
-                                : "Download E-Ticket"}
-                          </button>
-                        )}
+                      {displayBookingId && displayPnr && displayPnr !== "PENDING" && (
+                        <button
+                          onClick={() =>
+                            handleDownloadEticket({
+                              bookingId: displayBookingId,
+                              pnr: displayPnr,
+                              fileLabel: displayInboundPnr
+                                ? "Outbound_ETicket"
+                                : "ETicket",
+                            })
+                          }
+                          disabled={downloading}
+                          type="button"
+                          className="inline-flex items-center justify-center gap-2 px-5 py-3 bg-gradient-to-r from-[#FF2E57] to-[#FF6B35] text-white rounded-xl text-sm font-semibold hover:shadow-lg hover:shadow-[#FF2E57]/20 transition-all active:scale-[0.97] disabled:opacity-60"
+                        >
+                          <Download className="w-4 h-4" />
+                          {downloading
+                            ? "Downloading..."
+                            : displayInboundPnr
+                              ? "Download Outbound E-Ticket"
+                              : "Download E-Ticket"}
+                        </button>
+                      )}
 
                       {displayInboundBookingId &&
                         displayInboundPnr &&

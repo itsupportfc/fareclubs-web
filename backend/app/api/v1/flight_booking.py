@@ -23,7 +23,15 @@ from app.transformers.booking_transformer import BookingConfirmationTransformer
 from app.transformers.tbo_transformer import TBOTransformer
 from app.utils.cache import FlightCache, get_flight_cache
 from app.utils.eticket_pdf import generate_eticket_pdf
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    HTTPException,
+    Request,
+    Response,
+    status,
+)
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -49,6 +57,7 @@ def _get_checkout_service(
     )
 
 
+# all this function does is Delegate
 @router.post("/create-order", response_model=BookingCreateOrderResponse)
 @limiter.limit("5/minute")
 async def create_booking_order(
@@ -131,7 +140,10 @@ async def download_eticket(
     try:
         pdf_bytes = generate_eticket_pdf(booking.provider_raw)
     except Exception as exc:
-        logger.exception("Failed to generate e-ticket PDF for booking_record_id=%s", booking_record_id)
+        logger.exception(
+            "Failed to generate e-ticket PDF for booking_record_id=%s",
+            booking_record_id,
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to generate e-ticket PDF.",

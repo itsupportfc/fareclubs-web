@@ -7,6 +7,7 @@ import Sidebar from "../components/search/Sidebar";
 import LoaderOverlay from "../components/common/LoaderOverlay";
 import ReturnFareModal from "../components/search/ReturnFareModal";
 import { useTripConfig } from "../hooks/useTripConfig";
+import { filterFlights } from "../utils/flightFilters";
 
 /* ================= HELPERS ================= */
 const getLowestFare = (flight) =>
@@ -37,56 +38,6 @@ const getFlightBaggage = (flight) => {
 // For domestic flights, segments[1] doesn't exist → returns [].
 const getReturnLegs = (flight) => getLowestFare(flight)?.segments?.[1] || [];
 
-const matchesTimeSlot = (hour, timeSlots = {}) => {
-    const slots = timeSlots || {};
-
-    const hasActive =
-        !!slots.earlyMorning ||
-        !!slots.morning ||
-        !!slots.afternoon ||
-        !!slots.evening;
-
-    if (!hasActive) return true;
-
-    return (
-        (slots.earlyMorning && hour >= 0 && hour < 8) ||
-        (slots.morning && hour >= 8 && hour < 12) ||
-        (slots.afternoon && hour >= 12 && hour < 18) ||
-        (slots.evening && hour >= 18 && hour < 24)
-    );
-};
-
-const matchesFlightFilters = (flight, filters = {}) => {
-    const first = getPrimarySegment(flight);
-    if (!first) return true;
-
-    const noOfStops =
-        typeof flight.noOfStops === "number"
-            ? flight.noOfStops
-            : Math.max(getPrimaryLegs(flight).length - 1, 0);
-
-    // Stop filters
-    const stopFilterActive = !!filters.nonStop || !!filters.oneStop;
-    if (stopFilterActive) {
-        const matchesStop =
-            (filters.nonStop && noOfStops === 0) ||
-            (filters.oneStop && noOfStops === 1);
-
-        if (!matchesStop) return false;
-    }
-
-    // Airline filters
-    if (filters.airlines?.length) {
-        const airlineName = first?.carrier?.name;
-        if (!filters.airlines.includes(airlineName)) return false;
-    }
-
-    // Time slot filters
-    const departureHour = new Date(first.departureTime).getHours();
-    if (!matchesTimeSlot(departureHour, filters.timeSlots)) return false;
-
-    return true;
-};
 
 /* ================= PAGE ================= */
 export default function ReturnResultsPage() {
@@ -139,17 +90,15 @@ export default function ReturnResultsPage() {
         setSelectedFlight({ outbound: flight, inbound: flight });
     };
 
-    const filteredOutboundFlights = useMemo(() => {
-        return outboundFlights.filter((flight) =>
-            matchesFlightFilters(flight, filters),
-        );
-    }, [outboundFlights, filters]);
+    const filteredOutboundFlights = useMemo(
+        () => filterFlights(outboundFlights, filters.outbound, filters.maxPrice),
+        [outboundFlights, filters],
+    );
 
-    const filteredInboundFlights = useMemo(() => {
-        return inboundFlights.filter((flight) =>
-            matchesFlightFilters(flight, filters),
-        );
-    }, [inboundFlights, filters]);
+    const filteredInboundFlights = useMemo(
+        () => filterFlights(inboundFlights, filters.inbound, filters.maxPrice),
+        [inboundFlights, filters],
+    );
 
     const totalPrice = useMemo(() => {
         return tripConfig.getDisplayPrice(selectedOutbound, selectedInbound);
@@ -201,7 +150,8 @@ export default function ReturnResultsPage() {
                             Round-trip Flights
                         </h2>
                         <motion.div
-                            initial="hidden"
+                            key={`intl-flights-${filteredOutboundFlights.length}`}
+                            initial="visible"
                             animate="visible"
                             variants={{
                                 hidden: {},
@@ -325,24 +275,34 @@ function FlightColumn({ title, flights, selected, onSelect, onDetails }) {
     return (
         <div>
             <h2 className="font-display text-xl mb-4">{title}</h2>
-            <motion.div
-                initial="hidden"
-                animate="visible"
-                variants={{
-                    hidden: {},
-                    visible: { transition: { staggerChildren: 0.06 } },
-                }}
-            >
-                {flights.map((f) => (
-                    <FlightCard
-                        key={f.groupId}
-                        flight={f}
-                        isSelected={selected?.groupId === f.groupId}
-                        onSelect={onSelect}
-                        onShowDetails={onDetails}
-                    />
-                ))}
-            </motion.div>
+            {flights.length === 0 ? (
+                <div className="text-center py-12 text-gray-500">
+                    <p className="font-display text-lg text-gray-400">
+                        No flights match the selected filters
+                    </p>
+                    <p className="text-sm mt-1">Try adjusting your filters</p>
+                </div>
+            ) : (
+                <motion.div
+                    key={`column-${title}-${flights.length}`}
+                    initial="visible"
+                    animate="visible"
+                    variants={{
+                        hidden: {},
+                        visible: { transition: { staggerChildren: 0.06 } },
+                    }}
+                >
+                    {flights.map((f) => (
+                        <FlightCard
+                            key={f.groupId}
+                            flight={f}
+                            isSelected={selected?.groupId === f.groupId}
+                            onSelect={onSelect}
+                            onShowDetails={onDetails}
+                        />
+                    ))}
+                </motion.div>
+            )}
         </div>
     );
 }
