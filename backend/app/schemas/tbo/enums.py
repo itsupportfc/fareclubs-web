@@ -60,6 +60,7 @@ class SeatAvailabilityTypeEnum(IntEnum):
 
 
 class SeatDescriptionEnum(IntEnum):
+    NOT_SET = 0
     INCLUDED = 1
     PURCHASE = 2  # seat charges are added while making ticket
 

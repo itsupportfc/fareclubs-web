@@ -1,4 +1,5 @@
 import { useCallback, useState } from "react";
+import { fetchWithTimeout } from "../../utils/http";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "/api/v1";
 
@@ -33,27 +34,37 @@ export function useRazorpayBooking(token) {
                 return;
             }
 
-            // 2. Create Razorpay order
+            // 2. Create Razorpay order — send only what the endpoint needs (no passengers)
             let orderData;
             try {
-                const res = await fetch(
+                const createOrderPayload = {
+                    fareIdOutbound: bookingPayload.fareIdOutbound,
+                    fareIdInbound: bookingPayload.fareIdInbound ?? null,
+                    totalAmount: bookingPayload.totalAmount,
+                };
+                setProcessingStep(1); // "Securing your fare..."
+                const orderRes = await fetchWithTimeout(
                     `${API_BASE}/flights/booking/create-order`,
                     {
                         method: "POST",
                         headers: {
                             "Content-Type": "application/json",
-                            Authorization: `Bearer ${token}`,
+                            ...(token
+                                ? { Authorization: `Bearer ${token}` }
+                                : {}),
                         },
-                        body: JSON.stringify(bookingPayload),
+                        body: JSON.stringify(createOrderPayload),
                     },
+                    15_000, // 15s timeout
                 );
-                if (!res.ok) {
-                    const err = await res.json();
+
+                if (!orderRes.ok) {
+                    const err = await orderRes.json();
                     throw new Error(
                         err?.detail || "Failed to create payment order",
                     );
                 }
-                orderData = await res.json();
+                orderData = await orderRes.json();
             } catch (err) {
                 onError(err.message);
                 return;
@@ -81,44 +92,55 @@ export function useRazorpayBooking(token) {
                 handler: async (response) => {
                     // Payment succeeded — show processing overlay
                     setIsProcessing(true);
-                    setProcessingStep(0); // Verifying payment...
+                    setProcessingStep(0); // "Verifying payment..."
 
+                    // Explicit payload — no spread, every field intentional
                     const confirmPayload = {
-                        ...bookingPayload,
+                        fareIdOutbound: bookingPayload.fareIdOutbound,
+                        fareIdInbound: bookingPayload.fareIdInbound ?? null,
+                        tripType: bookingPayload.tripType,
+                        isInternationalReturn:
+                            bookingPayload.isInternationalReturn ?? false,
+                        passengers: bookingPayload.passengers,
+                        totalAmount: bookingPayload.totalAmount,
+                        acceptPriceChange: false,
+                        // Razorpay payment proof — backend verifies this signature
                         razorpayOrderId: response.razorpay_order_id,
                         razorpayPaymentId: response.razorpay_payment_id,
                         razorpaySignature: response.razorpay_signature,
                     };
 
-                    try {
-                        const confirmBooking = async (payload) => {
-                            const res = await fetch(
-                                `${API_BASE}/flights/booking/confirm`,
-                                {
-                                    method: "POST",
-                                    headers: {
-                                        "Content-Type": "application/json",
-                                        Authorization: `Bearer ${token}`,
-                                    },
-                                    body: JSON.stringify(payload),
+                    const confirmBooking = async (payload) => {
+                        const res = await fetchWithTimeout(
+                            `${API_BASE}/flights/booking/confirm`,
+                            {
+                                method: "POST",
+                                headers: {
+                                    "Content-Type": "application/json",
+                                    ...(token
+                                        ? { Authorization: `Bearer ${token}` }
+                                        : {}),
                                 },
-                            );
-                            if (!res.ok) {
-                                if (res.status === 410) {
-                                    throw new Error(
-                                        "Your session expired after payment. Don't worry — your payment is safe. Please contact support@fareclubs.com for assistance.",
-                                    );
-                                }
-                                const err = await res.json();
+                                body: JSON.stringify(payload),
+                            },
+                            120_000, // 2-min timeout — TBO ticketing can be slow
+                        );
+                        if (!res.ok) {
+                            if (res.status === 410) {
                                 throw new Error(
-                                    err?.detail ||
-                                        "Booking confirmation failed",
+                                    "Your session expired after payment. Don't worry — your payment is safe. Please contact support@fareclubs.com for assistance.",
                                 );
                             }
-                            return res.json();
-                        };
+                            const err = await res.json();
+                            throw new Error(
+                                err?.detail || "Booking confirmation failed",
+                            );
+                        }
+                        return res.json();
+                    };
 
-                        setProcessingStep(1); // Booking with airline...
+                    try {
+                        setProcessingStep(1); // "Booking with airline..."
                         let booking = await confirmBooking(confirmPayload);
                         const needsReconfirm =
                             booking?.status === "pending" &&
@@ -143,7 +165,7 @@ export function useRazorpayBooking(token) {
                             });
                         }
 
-                        setProcessingStep(2); // Generating ticket...
+                        setProcessingStep(2); // "Generating ticket..."
                         onSuccess(booking);
                     } catch (err) {
                         onError(err.message);

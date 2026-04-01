@@ -65,3 +65,4 @@ aiosmtplib==2.0.2
 redis==5.2.1
 fpdf2>=2.8.0
 setuptools<70
+slowapi>=0.1.9

@@ -18,12 +18,8 @@ from .base import TBOBaseSchema, TBOError
 
 # Book
 from .book import (
-    BaggageSelection,
     BookPassenger,
-    # FlightItinerary,
-    MealSelection,
     PassengerFare,
-    SeatDynamicSelection,
     TBOBookRequest,
     TBOBookResponse,
 )
@@ -48,11 +44,10 @@ from .common import (
     Meal,
     MiniFareRule,
     OriginInfo,
-    # RowSeats,
     Seat,
     SeatDynamic,
     Segment,
-    # SegmentSeat,
+    SimpleMeal,
 )
 
 # Enums
@@ -126,7 +121,7 @@ __all__ = [
     "Seat",
     "SeatDynamic",
     "Segment",
-    "SegmentSeat",
+    "SimpleMeal",
     # Auth
     "TBOAuthRequest",
     "TBOAuthResponse",
@@ -152,10 +147,7 @@ __all__ = [
     "TBOSSRResponse",
     # Book
     "BookPassenger",
-    # "FlightItinerary",
-    "MealSelection",
     "PassengerFare",
-    "SeatDynamicSelection",
     "TBOBookRequest",
     "TBOBookResponse",
     # Ticket

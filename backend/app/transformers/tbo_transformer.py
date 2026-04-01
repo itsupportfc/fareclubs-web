@@ -41,11 +41,8 @@ from app.schemas.internal.ssr import (
     SeatType,
 )
 from app.schemas.tbo.book import (
-    BaggageSelection,
     BookPassenger,
-    MealSelection,
     PassengerFare,
-    SeatDynamicSelection,
     TBOBookRequest,
 )
 from app.schemas.tbo.common import (
@@ -394,6 +391,62 @@ class TBOTransformer:
         """Build TBO Book request for Non-LCC flights."""
         free_ssr = self._find_free_ssr(raw_ssr)
 
+        # Build per-segment lookup maps from cached SSR (mirrors LCC approach)
+        seat_maps: list[dict[str, Seat]] = []
+        baggage_maps: list[dict[str, Baggage]] = []
+        meal_map: dict[str, SimpleMeal] = {}  # non-LCC meals are a flat list
+        segment_keys: list[tuple[str, str]] = []  # (Origin, FlightNumber) per segment
+
+        if raw_ssr and raw_ssr.Response:
+            # Seats — per segment
+            if raw_ssr.Response.SeatDynamic:
+                for sd in raw_ssr.Response.SeatDynamic:
+                    if sd.SegmentSeat:
+                        for seg in sd.SegmentSeat:
+                            seg_seats: dict[str, Seat] = {}
+                            reference_seat: Seat | None = None
+                            if seg.RowSeats:
+                                for row in seg.RowSeats:
+                                    for seat in row.Seats:
+                                        if reference_seat is None:
+                                            reference_seat = seat
+                                        if (
+                                            seat.Code
+                                            and seat.Code != "NoSeat"
+                                            and seat.AvailablityType
+                                            == SeatAvailabilityTypeEnum.AVAILABLE
+                                        ):
+                                            seg_seats[seat.Code] = seat
+                            seat_maps.append(seg_seats)
+                            if reference_seat:
+                                segment_keys.append(
+                                    (reference_seat.Origin, reference_seat.FlightNumber)
+                                )
+
+            # Baggage — group by (Origin, FlightNumber) to match segment order
+            if raw_ssr.Response.Baggage:
+                for seg_options in raw_ssr.Response.Baggage:
+                    grouped: dict[tuple[str, str], dict[str, Baggage]] = {}
+                    for b in seg_options or []:
+                        key = (b.Origin, b.FlightNumber)
+                        if key not in grouped:
+                            grouped[key] = {}
+                        grouped[key][b.Code] = b
+                    seen: set[tuple[str, str]] = set()
+                    for sk in segment_keys:
+                        if sk in grouped and sk not in seen:
+                            seen.add(sk)
+                            baggage_maps.append(grouped[sk])
+                    for gk, gv in grouped.items():
+                        if gk not in seen:
+                            baggage_maps.append(gv)
+
+            # Meal — flat list for non-LCC (SimpleMeal: Code + Description string)
+            if raw_ssr.Response.Meal:
+                for m in raw_ssr.Response.Meal:
+                    if m.Code:
+                        meal_map[m.Code] = m
+
         passengers = []
         for p in request.passengers:
             dob = datetime.strptime(p.date_of_birth, "%Y-%m-%d")
@@ -429,32 +482,48 @@ class TBOTransformer:
             else:
                 ssr_segments = p.ssr_segments_outbound or []
 
-            first_ssr = ssr_segments[0] if ssr_segments else None
+            meal: SimpleMeal | None = None
+            seat_list: list[Seat] = []
+            baggage_list: list[Baggage] = []
 
-            meal = None
-            seat_pref = None
-            baggage = None
-            if first_ssr:
-                if first_ssr.meal_code:
-                    meal = MealSelection(Code=first_ssr.meal_code, Description=2)
-                if first_ssr.seat_code:
-                    seat_pref = SeatDynamicSelection(
-                        Code=first_ssr.seat_code, Description=2
-                    )
-                if first_ssr.baggage_code:
-                    baggage = BaggageSelection(
-                        Code=first_ssr.baggage_code, Description=2
-                    )
+            for seg_idx, seg_ssr in enumerate(ssr_segments):
+                if seg_ssr is None:
+                    continue
 
-            # Auto-assign free SSR if user didn't select
+                # Meal — single selection for non-LCC; use first valid hit across segments
+                if not meal and seg_ssr.meal_code:
+                    if not meal_map or seg_ssr.meal_code in meal_map:
+                        desc = (
+                            meal_map[seg_ssr.meal_code].Description
+                            if seg_ssr.meal_code in meal_map
+                            else (seg_ssr.meal_description or seg_ssr.meal_code)
+                        )
+                        meal = SimpleMeal(Code=seg_ssr.meal_code, Description=desc)
+
+                # Seat — one full Seat object per segment
+                if p.pax_type != 3:  # not infant
+                    s_map = seat_maps[seg_idx] if seg_idx < len(seat_maps) else {}
+                    if seg_ssr.seat_code and seg_ssr.seat_code in s_map:
+                        seat_list.append(s_map[seg_ssr.seat_code])
+
+                # Baggage — one per segment
+                if seg_ssr.baggage_code:
+                    b_map = baggage_maps[seg_idx] if seg_idx < len(baggage_maps) else {}
+                    if seg_ssr.baggage_code in b_map:
+                        baggage_list.append(b_map[seg_ssr.baggage_code])
+
+            # Auto-assign free SSR if user didn't select anything
             if not meal and free_ssr["free_meal_code"]:
-                meal = MealSelection(Code=free_ssr["free_meal_code"], Description=1)
+                free_meal_obj = meal_map.get(free_ssr["free_meal_code"])
+                meal = SimpleMeal(
+                    Code=free_ssr["free_meal_code"],
+                    Description=free_meal_obj.Description
+                    if free_meal_obj
+                    else free_ssr["free_meal_code"],
+                )
             if p.pax_type != 3:  # not infant
-                if not baggage and free_ssr["free_baggage"]:
-                    baggage = BaggageSelection(
-                        Code=free_ssr["free_baggage"].Code,
-                        Description=1,
-                    )
+                if not baggage_list and free_ssr["free_baggage"]:
+                    baggage_list = [free_ssr["free_baggage"]]
 
             passengers.append(
                 BookPassenger(
@@ -491,8 +560,8 @@ class TBOTransformer:
                     GSTCompanyEmail=p.gst.gst_company_email if p.gst else None,
                     Fare=fare,
                     MealDynamic=meal,
-                    SeatDynamic=seat_pref,
-                    Baggage=baggage,
+                    SeatDynamic=seat_list or None,
+                    Baggage=baggage_list or None,
                 )
             )
 
@@ -767,9 +836,14 @@ class TBOTransformer:
             )
         itinerary = inner.FlightItinerary
 
-        # Build passenger info
+        # Build passenger info (including confirmed seat numbers per segment)
         passengers_info = []
         for pax in itinerary.Passenger:
+            seat_numbers: list[str | None] | None = None
+            if pax.SegmentAdditionalInfo:
+                seat_numbers = [
+                    seg.Seat or None for seg in pax.SegmentAdditionalInfo
+                ]
             passengers_info.append(
                 ConfirmPassengerInfo(
                     title=pax.Title,
@@ -779,10 +853,11 @@ class TBOTransformer:
                     ticket_number=pax.Ticket.TicketNumber if pax.Ticket else None,
                     email=pax.Email,
                     contact_no=pax.ContactNo,
+                    seat_numbers=seat_numbers,
                 )
             )
 
-        # Build segment baggage info from first passenger's SegmentAdditionalInfo
+        # Build segment baggage/meal info from first passenger's SegmentAdditionalInfo
         segment_baggage = []
         first_pax = itinerary.Passenger[0] if itinerary.Passenger else None
         if first_pax and first_pax.SegmentAdditionalInfo:
@@ -792,6 +867,7 @@ class TBOTransformer:
                         fare_basis=seg_info.FareBasis,
                         baggage=seg_info.Baggage,
                         cabin_baggage=seg_info.CabinBaggage,
+                        meal=seg_info.Meal or None,
                     )
                 )
 

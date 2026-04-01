@@ -491,7 +491,7 @@ export default function BookingConfirmationPage() {
                       </div>
                     </div>
 
-                    {/* Baggage info */}
+                    {/* Baggage / meal info */}
                     {(baggageInfo || leg.checkedBaggage || leg.cabinBaggage) && (
                       <div className="mt-3 flex flex-wrap gap-3">
                         {(baggageInfo?.baggage || leg.checkedBaggage) && (
@@ -506,6 +506,11 @@ export default function BookingConfirmationPage() {
                             <Luggage className="w-3 h-3" />
                             Cabin:{" "}
                             {baggageInfo?.cabinBaggage || leg.cabinBaggage}
+                          </span>
+                        )}
+                        {baggageInfo?.meal && (
+                          <span className="inline-flex items-center gap-1.5 text-xs text-gray-500 bg-gray-50 px-2.5 py-1 rounded-md">
+                            🍽 Meal: {baggageInfo.meal}
                           </span>
                         )}
                       </div>
@@ -539,10 +544,13 @@ export default function BookingConfirmationPage() {
                     <th className="px-2 pb-3 font-medium">Passenger</th>
                     <th className="px-2 pb-3 font-medium">Type</th>
                     <th className="px-2 pb-3 font-medium">Ticket Number</th>
+                    <th className="px-2 pb-3 font-medium">Seat(s)</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {passengers.map((pax, i) => (
+                  {passengers.map((pax, i) => {
+                    const seatDisplay = pax.seatNumbers?.filter(Boolean).join(" · ") || "--";
+                    return (
                     <tr key={i} className="text-gray-700">
                       <td className="px-2 py-3 text-gray-400">{i + 1}</td>
                       <td className="px-2 py-3 font-medium">
@@ -556,8 +564,12 @@ export default function BookingConfirmationPage() {
                       <td className="px-2 py-3 font-mono text-xs text-gray-500">
                         {pax.ticketNumber || "--"}
                       </td>
+                      <td className="px-2 py-3 font-mono text-xs text-gray-500">
+                        {seatDisplay}
+                      </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

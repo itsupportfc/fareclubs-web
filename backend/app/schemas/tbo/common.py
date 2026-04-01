@@ -82,6 +82,13 @@ class AirlineInfo(TBOBaseSchema):
     OperatingCarrier: str = ""
 
 
+class FareClassification(TBOBaseSchema):
+    """Fare brand/type info"""
+
+    Color: str | None = None
+    Type: str | None = None
+
+
 # ----------------------------------------------------------------------
 # Segment Model
 # ----------------------------------------------------------------------
@@ -119,9 +126,13 @@ class Segment(TBOBaseSchema):
     FlightStatus: Annotated[str, Field(description="e.g. Confirmed", default="")]
     Status: str = ""
 
-    # Stop point times (for stops)
+    # Stop point
+    StopPoint: str | None = None
     StopPointArrivalTime: datetime | None = None
     StopPointDepartureTime: datetime | None = None
+
+    # Index (matches FlightInfoIndex in response passenger SegmentDetails)
+    FlightInfoIndex: str | None = None
 
     # PNR
     AirlinePNR: str | None = None
@@ -190,13 +201,6 @@ class FareBreakdown(TBOBaseSchema):
     AdditionalTxnFeePub: float = 0.0
     PGCharge: float | None = None
     SupplierReissueCharges: float | None = None
-
-
-class FareClassification(TBOBaseSchema):
-    """Fare brand/type info"""
-
-    Color: str | None = None
-    Type: str | None = None
 
 
 # ----------------------------------------------------------------------
@@ -292,11 +296,11 @@ class Seat(TBOBaseSchema):
 
     AirlineCode: str
     FlightNumber: str
-    CraftType: str  # need this mapping?
+    CraftType: str | None = None
     Origin: str
     Destination: str
     AvailablityType: SeatAvailabilityTypeEnum
-    Description: SeatDescriptionEnum
+    Description: SeatDescriptionEnum 
     Code: str
     RowNo: str
     SeatNo: str | None = None

@@ -101,8 +101,8 @@ def generate_eticket_pdf(provider_raw: dict) -> bytes:
     # Table header
     pdf.set_font("Helvetica", "B", 8)
     pdf.set_fill_color(243, 244, 246)
-    col_w = [10, 55, 25, 50, 50]
-    headers = ["#", "Name", "Type", "Ticket Number", "Baggage"]
+    col_w = [8, 48, 18, 42, 36, 38]
+    headers = ["#", "Name", "Type", "Ticket No.", "Seat(s)", "Baggage"]
     for i, h in enumerate(headers):
         pdf.cell(col_w[i], 7, h, border=1, fill=True)
     pdf.ln()
@@ -117,15 +117,20 @@ def generate_eticket_pdf(provider_raw: dict) -> bytes:
             ticket_num = ticket.get("TicketNumber", "")
 
         baggage_str = ""
+        seat_str = ""
         seg_add_info = pax.get("SegmentAdditionalInfo", [])
         if seg_add_info and isinstance(seg_add_info, list) and len(seg_add_info) > 0:
             baggage_str = seg_add_info[0].get("Baggage", "")
+            # Collect seat numbers across all segments (e.g. "31H · 73G")
+            seats = [s.get("Seat") or "" for s in seg_add_info]
+            seat_str = " · ".join(s for s in seats if s)
 
         pdf.cell(col_w[0], 6, str(idx + 1), border=1)
-        pdf.cell(col_w[1], 6, name[:30], border=1)
+        pdf.cell(col_w[1], 6, name[:28], border=1)
         pdf.cell(col_w[2], 6, pax_type, border=1)
-        pdf.cell(col_w[3], 6, ticket_num[:28], border=1)
-        pdf.cell(col_w[4], 6, baggage_str[:28], border=1)
+        pdf.cell(col_w[3], 6, ticket_num[:26], border=1)
+        pdf.cell(col_w[4], 6, seat_str[:20], border=1)
+        pdf.cell(col_w[5], 6, baggage_str[:24], border=1)
         pdf.ln()
 
     pdf.ln(4)

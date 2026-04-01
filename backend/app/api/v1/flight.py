@@ -50,12 +50,23 @@ from app.utils.email import (
     send_staff_alert_email,
 )
 from app.utils.eticket_pdf import generate_eticket_pdf
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    HTTPException,
+    Request,
+    Response,
+    status,
+)
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/flights", tags=["Flights"])
+limiter = Limiter(key_func=get_remote_address)
 
 
 # ==============================================================================
@@ -505,10 +516,24 @@ async def get_ssr_details(
 
 
 @router.post("/booking/create-order", response_model=BookingCreateOrderResponse)
+@limiter.limit("5/minute")  # ← rate limit: 5 order attempts per IP per minute
 async def create_booking_order(
+    request: Request,  # required by slowapi to read client IP
     payload: BookingCreateOrderRequest,
     cache=Depends(get_flight_cache),
+    current_user: User | None = Depends(get_optional_current_user),
 ):
+    req_id = uuid4().hex[:8]
+    # Log differently for guests vs logged-in users — both are valid
+    user_label = f"user_id={current_user.id}" if current_user else "guest"
+    logger.info(
+        "[%s] create_booking_order : %s, fare_id_outbound=%s, fare_id_inbound=%s, total_amount=₹%.2f",
+        req_id,
+        user_label,
+        payload.fare_id_outbound,
+        payload.fare_id_inbound,
+        payload.total_amount,
+    )
     cached = await cache.get(payload.fare_id_outbound)
     if not cached:
         raise HTTPException(
@@ -534,28 +559,50 @@ async def create_booking_order(
             )
         expected_total += verified_inbound
 
-    if payload.total_amount < expected_total - 1.0:
+    # 3. Amount check — round to avoid floating-point precision issues
+    #    Principle: Never compare floats with ==. Round both sides to 2 decimal places.
+    #    We allow a small tolerance (₹1) to handle rounding differences between
+    #    frontend and backend, but the client must NOT underpay by more than that.
+    submitted = round(payload.total_amount, 2)
+    expected = round(expected_total, 2)
+    if submitted < expected - 1.0:
+        logger.warning(
+            "[%s] Amount mismatch: submitted=%.2f expected=%.2f",
+            req_id,
+            submitted,
+            expected,
+        )
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Amount too low: submitted ₹{payload.total_amount}, minimum ₹{expected_total}. Please refresh fares.",
+            detail=f"Amount mismatch: submitted ₹{submitted}, expected ₹{expected}. Please refresh fares.",
         )
 
     try:
         order = razorpay_utils.create_order(
-            amount_paise=int(payload.total_amount * 100),
+            amount_paise=int(expected * 100),
             receipt=payload.fare_id_outbound,
         )
     except Exception as e:
+        logger.error("[%s] Razorpay order creation failed: %s", req_id, e)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Failed to create payment order: {str(e)}",
+            detail="Payment gateway is temporarily unavailable. Please try again.",
+            # ← never leak str(e) — internal error details stay in logs
         )
+
+    logger.info(
+        "[%s] create_booking_order: Razorpay order created (order_id=%s, amount_paise=%d)",
+        req_id,
+        order["id"],
+        order["amount"],
+    )
 
     return BookingCreateOrderResponse(
         razorpay_order_id=order["id"],
         amount=order["amount"],
         currency=order["currency"],
         razorpay_key_id=settings.RAZORPAY_KEY_ID,
+        verified_amount=expected,
     )
 
 

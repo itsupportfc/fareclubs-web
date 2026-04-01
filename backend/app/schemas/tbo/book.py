@@ -12,34 +12,13 @@ from typing import Annotated
 from pydantic import Field
 
 from .base import TBOBaseSchema, TBOError
-from .common import BarcodeDetailsModel, FareRule, Segment
+from .common import Baggage, BarcodeDetailsModel, FareRule, Seat, Segment, SimpleMeal
 from .common import Fare as FareModel
 from .enums import TripIndicator
 
 # ==============================================================================
 # BOOK REQUEST
 # ==============================================================================
-
-
-class MealSelection(TBOBaseSchema):
-    """Meal selection for passenger"""
-
-    Code: str
-    Description: int
-
-
-class SeatDynamicSelection(TBOBaseSchema):
-    """Seat selection for passenger"""
-
-    Code: str
-    Description: int
-
-
-class BaggageSelection(TBOBaseSchema):
-    """Baggage selection for passenger"""
-
-    Code: str
-    Description: int
 
 
 class PassengerFare(TBOBaseSchema):
@@ -69,7 +48,7 @@ class BookPassenger(TBOBaseSchema):
     FirstName: str
     LastName: str
     PaxType: int  # 1: Adult, 2: Child, 3: Infant
-    DateOfBirth: datetime  # make it optional
+    DateOfBirth: datetime
     Gender: int
 
     # Passport (required for international)
@@ -101,9 +80,18 @@ class BookPassenger(TBOBaseSchema):
 
     # Fare and SSR
     Fare: PassengerFare
-    MealDynamic: MealSelection | None = None
-    SeatDynamic: SeatDynamicSelection | None = None
-    Baggage: BaggageSelection | None = None
+    MealDynamic: Annotated[
+        SimpleMeal | None,
+        Field(description="Single meal selection. Description is the meal name string.", default=None),
+    ]
+    SeatDynamic: Annotated[
+        list[Seat] | None,
+        Field(description="One full Seat object per flight segment.", default=None),
+    ]
+    Baggage: Annotated[
+        list[Baggage] | None,
+        Field(description="Baggage selections, one per segment.", default=None),
+    ]
 
 
 class TBOBookRequest(TBOBaseSchema):
@@ -122,7 +110,7 @@ class TBOBookRequest(TBOBaseSchema):
 
 
 class ResponsePassenger(TBOBaseSchema):
-    """Passenger Schema in booking response"""
+    """Passenger in booking response"""
 
     PaxId: Annotated[int, Field(description="Unique pax id TBO gives in response")]
     Title: str
@@ -130,7 +118,7 @@ class ResponsePassenger(TBOBaseSchema):
     LastName: str
     PaxType: Annotated[int, Field(description=" 1=Adult, 2=Child, 3=Infant")]
     DateOfBirth: datetime | None = None
-    Gender: Annotated[int, Field(description=" 1=Male, 2=Female ??? need to confirm")]
+    Gender: Annotated[int, Field(description=" 1=Male, 2=Female")]
     PassportNo: str | None = None
     PassportExpiry: datetime | None = None
     AddressLine1: str | None = None
@@ -145,8 +133,9 @@ class ResponsePassenger(TBOBaseSchema):
     FFNumber: str | None = None
     Fare: FareModel
 
-    Meal: MealSelection | None = None
-    Seat: SeatDynamicSelection | None = None
+    # Confirmed SSR
+    Meal: SimpleMeal | None = None
+    SeatDynamic: list[Seat] | None = None  # confirmed seats, one per segment
     Baggage: list | None = None
     Ssr: list | None = None
     SegmentAdditionalInfo: list | None = None
@@ -178,6 +167,7 @@ class FlightItineraryModel(TBOBaseSchema):
     NonRefundable: bool
     FareType: str
     CancellationCharges: float | None = None
+    IsSeatsBooked: bool | None = None  # whether seat selection was confirmed by TBO
 
     Fare: FareModel
     Passenger: list[ResponsePassenger]

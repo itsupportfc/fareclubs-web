@@ -8,9 +8,8 @@ Frontend-facing schemas for the 2-step booking flow:
 
 from typing import Literal
 
-from pydantic import model_validator
-
 from app.schemas.internal.base import InternalBaseSchema
+from pydantic import model_validator
 
 
 class PassengerFareInfo(InternalBaseSchema):
@@ -100,11 +99,13 @@ class PassengerInfo(InternalBaseSchema):
 
 
 class BookingCreateOrderRequest(InternalBaseSchema):
+    """Only the fields needed to create a Razorpay Order."""
+
     fare_id_outbound: str
     fare_id_inbound: str | None = None
-    trip_type: Literal["oneway", "roundtrip"]
-    is_international_return: bool = False
-    passengers: list[PassengerInfo]
+    # trip_type: Literal["oneway", "roundtrip"]
+    # is_international_return: bool = False
+    # passengers: list[PassengerInfo]
     total_amount: float
 
 
@@ -113,6 +114,8 @@ class BookingCreateOrderResponse(InternalBaseSchema):
     amount: int  # paise
     currency: str  # "INR"
     razorpay_key_id: str
+    # The expected total (mirrors what the server verified) — lets frontend cross-check
+    verified_amount: float
 
 
 # ==============================================================================
@@ -143,14 +146,16 @@ class ConfirmPassengerInfo(InternalBaseSchema):
     ticket_number: str | None = None
     email: str | None = None
     contact_no: str | None = None
+    seat_numbers: list[str | None] | None = None  # confirmed seat per segment e.g. ["31H", "73G"]
 
 
 class SegmentBaggageInfo(InternalBaseSchema):
-    """Per-segment baggage info from ticket response."""
+    """Per-segment confirmed info from ticket response (based on first passenger)."""
 
     fare_basis: str | None = None
-    baggage: str | None = None  # "15 KG"
-    cabin_baggage: str | None = None  # "7 KG"
+    baggage: str | None = None  # e.g. "2 Piece(s)"
+    cabin_baggage: str | None = None  # e.g. "Hand Luggage"
+    meal: str | None = None  # e.g. "Included" or meal name
 
 
 class FareBreakdownInfo(InternalBaseSchema):

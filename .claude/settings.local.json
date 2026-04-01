@@ -9,7 +9,12 @@
       "Bash(find /d/CSE/Fareclubs/Projects/fareclubs-web/backend -name *.py -path */test* -prune -o -type f -name test*.py -print)",
       "Bash(/dev/null:*)",
       "Bash(grep -r \"api_key\\\\|secret\\\\|password\\\\|token\" /d/CSE/Fareclubs/Projects/fareclubs-web/backend/app --include=*.py)",
-      "Bash(find /d/CSE/Fareclubs/Projects/fareclubs-web/backend/app -name \"*.py\" -exec grep -l \"get_token\\\\|authenticate\" {})"
+      "Bash(find /d/CSE/Fareclubs/Projects/fareclubs-web/backend/app -name \"*.py\" -exec grep -l \"get_token\\\\|authenticate\" {})",
+      "Bash(find /d/CSE/Fareclubs/Projects/fareclubs-web -name *transformer* -type f)",
+      "Bash(python -c \"from app.schemas.tbo.book import TBOBookRequest, BookPassenger; from app.schemas.tbo.common import SimpleMeal, Seat, Baggage; print\\(''book.py imports OK''\\)\")",
+      "Bash(python -m venv .venv)",
+      "Bash(.venv/Scripts/python -c \"from app.schemas.tbo.book import TBOBookRequest, BookPassenger; from app.schemas.tbo.common import SimpleMeal, Seat, Baggage; print\\(''''book.py imports OK''''\\)\")",
+      "Bash(.venv/Scripts/python -c \":*)"
     ]
   }
 }
