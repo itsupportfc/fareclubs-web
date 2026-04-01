@@ -5,7 +5,7 @@ import {
 } from "lucide-react";
 import useFlightStore from "../../store/useFlightStore";
 
-/* ---- Sub-components defined OUTSIDE the parent (avoids re-creation each render) ---- */
+/* ---- Sub-components ---- */
 
 function RouteInfoCard({ originCity, destCity, departureAirport, arrivalAirport }) {
   return (
@@ -25,7 +25,13 @@ function RouteInfoCard({ originCity, destCity, departureAirport, arrivalAirport 
 }
 
 function FilterCard({ filters, setFilters }) {
-  const handleCheckbox = (key) => setFilters({ ...filters, [key]: !filters[key] });
+  const handleCheckbox = (key) => {
+    setFilters({
+      ...filters,
+      [key]: !filters[key],
+    });
+  };
+
   return (
     <div className="bg-white shadow-md p-4 rounded-xl border border-gray-100 hover:shadow-lg transition-all duration-200">
       <h3 className="text-lg font-semibold mb-3 text-gray-900 flex items-center gap-2">
@@ -66,7 +72,10 @@ function TimeSlotCard({ filters, setFilters }) {
   const handleTimeSlotChange = (key) => {
     setFilters({
       ...filters,
-      timeSlots: { ...filters.timeSlots, [key]: !filters.timeSlots?.[key] },
+      timeSlots: {
+        ...(filters.timeSlots || {}),
+        [key]: !filters.timeSlots?.[key],
+      },
     });
   };
 
@@ -103,11 +112,14 @@ function TimeSlotCard({ filters, setFilters }) {
 function AirlinesCard({ airlines, filters, setFilters }) {
   const handleCheckbox = (airline) => {
     const selected = filters.airlines || [];
-    if (selected.includes(airline)) {
-      setFilters({ ...filters, airlines: selected.filter((a) => a !== airline) });
-    } else {
-      setFilters({ ...filters, airlines: [...selected, airline] });
-    }
+    const exists = selected.includes(airline);
+
+    setFilters({
+      ...filters,
+      airlines: exists
+        ? selected.filter((a) => a !== airline)
+        : [...selected, airline],
+    });
   };
 
   return (
@@ -115,7 +127,10 @@ function AirlinesCard({ airlines, filters, setFilters }) {
       <h3 className="text-lg font-semibold mb-3 text-gray-900">Airlines</h3>
       <div className="space-y-2 text-sm text-gray-700">
         {airlines.map((airline) => (
-          <label key={airline} className="flex items-center gap-2 cursor-pointer hover:text-orange-500 transition-colors duration-200">
+          <label
+            key={airline}
+            className="flex items-center gap-2 cursor-pointer hover:text-orange-500 transition-colors duration-200"
+          >
             <input
               type="checkbox"
               checked={filters.airlines?.includes(airline) || false}
@@ -132,31 +147,45 @@ function AirlinesCard({ airlines, filters, setFilters }) {
 
 /* ---- Main Sidebar ---- */
 
-const Sidebar = () => {
-  const { outboundFlights, filters = {}, setFilters } = useFlightStore();
+const Sidebar = ({ outboundFlights: outboundFlightsProp, inboundFlights: inboundFlightsProp }) => {
+  const {
+    outboundFlights: storeOutboundFlights,
+    inboundFlights: storeInboundFlights,
+    filters = {},
+    setFilters,
+  } = useFlightStore();
 
-  // Derive airline names from actual search results
+  const outboundFlights = outboundFlightsProp || storeOutboundFlights || [];
+  const inboundFlights = inboundFlightsProp || storeInboundFlights || [];
+
+  const allFlights = [...outboundFlights, ...inboundFlights];
+
   const airlines = useMemo(() => {
     const names = new Set();
-    (outboundFlights || []).forEach((flight) => {
-      const seg = flight.fares?.[0]?.segments?.[0]?.[0]
-        || flight.fares?.[0]?.segments?.flat()?.[0];
+
+    allFlights.forEach((flight) => {
+      const seg =
+        flight?.fares?.[0]?.segments?.[0]?.[0] ||
+        flight?.fares?.[0]?.segments?.flat()?.[0];
+
       if (seg?.carrier?.name) names.add(seg.carrier.name);
     });
-    return [...names].sort();
-  }, [outboundFlights]);
 
-  // Derive route info from first flight
-  const firstFlight = outboundFlights?.[0];
-  const firstSeg = firstFlight?.fares?.[0]?.segments?.[0]?.[0]
-    || firstFlight?.fares?.[0]?.segments?.flat()?.[0];
+    return [...names].sort();
+  }, [allFlights]);
+
+  const firstFlight = outboundFlights[0] || inboundFlights[0];
+  const firstSeg =
+    firstFlight?.fares?.[0]?.segments?.[0]?.[0] ||
+    firstFlight?.fares?.[0]?.segments?.flat()?.[0];
+
   const originCity = firstSeg?.departure?.city || firstFlight?.origin || "Origin";
   const destCity = firstSeg?.arrival?.city || firstFlight?.destination || "Destination";
   const departureAirport = firstSeg?.departure?.name || "";
   const arrivalAirport = firstSeg?.arrival?.name || "";
 
-  // Scroll to Top Button
   const [showTop, setShowTop] = useState(false);
+
   useEffect(() => {
     const handleScroll = () => setShowTop(window.scrollY > 300);
     window.addEventListener("scroll", handleScroll);

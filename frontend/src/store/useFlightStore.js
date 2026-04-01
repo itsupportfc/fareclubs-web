@@ -79,12 +79,16 @@ const useFlightStore = create((set, get) => ({
   setTripType: (tripType) => set({ tripType }),
 
   setFilters: (newFilters) =>
-    set((state) => ({
-      filters: {
-        ...state.filters,
-        ...newFilters,
+  set((state) => ({
+    filters: {
+      ...state.filters,
+      ...newFilters,
+      timeSlots: {
+        ...(state.filters.timeSlots || {}),
+        ...(newFilters.timeSlots || {}),
       },
-    })),
+    },
+  })),
 
   // ===============================
   // 🔄 Flight Cache Methods
