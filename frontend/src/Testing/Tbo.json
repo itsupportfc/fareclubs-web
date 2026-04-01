@@ -9386,3 +9386,4 @@
 2026-03-30 09:08:10,951 sqlalchemy.engine.Engine INFO COMMIT
 2026-03-30 09:08:10,955 uvicorn.access INFO 172.18.0.1:64792 - "POST /api/v1/flights/booking/confirm HTTP/1.1" 200
 2026-03-30 09:08:14,617 app.utils.email INFO Staff alert email sent: [BOOKING FAILED] Himanshu yadav — e3ce
+git fetch origingit fetch origin
