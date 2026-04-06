@@ -519,7 +519,7 @@ class BookingCheckoutService:
                 "Our team has been notified and will contact you shortly."
             ),
         )
-        if outbound_transform.leg.leg_status is not BookingLegStatus.CONFIRMED:
+        if outbound_transform.leg.leg_status != BookingLegStatus.CONFIRMED:
             support_needed = True
             self._queue_leg_alert(
                 result=outbound_result,
@@ -536,7 +536,7 @@ class BookingCheckoutService:
                     "Your return flight encountered an issue. Our team has been notified and will resolve this shortly."
                 ),
             )
-            if inbound_transform.leg.leg_status is not BookingLegStatus.CONFIRMED:
+            if inbound_transform.leg.leg_status != BookingLegStatus.CONFIRMED:
                 support_needed = True
                 self._queue_leg_alert(
                     result=inbound_result,
@@ -544,13 +544,24 @@ class BookingCheckoutService:
                     background_tasks=background_tasks,
                 )
 
-        overall_status = derive_overall_booking_status(
-            outbound_transform.leg.leg_status,
-            inbound_transform.leg.leg_status if inbound_transform else None,
+        outbound_leg_status = outbound_transform.leg.leg_status
+        inbound_leg_status = (
+            inbound_transform.leg.leg_status if inbound_transform else None
         )
+        logger.debug(
+            "deriving overall_status: outbound_leg=%s (type=%s), inbound_leg=%s",
+            outbound_leg_status,
+            type(outbound_leg_status).__name__,
+            inbound_leg_status,
+        )
+        overall_status = derive_overall_booking_status(
+            outbound_leg_status,
+            inbound_leg_status,
+        )
+        logger.debug("derived overall_status=%s", overall_status)
 
         if (
-            overall_status is BookingOverallStatus.CONFIRMED
+            overall_status == BookingOverallStatus.CONFIRMED
             and outbound_result.provider_raw
             and outbound_transform.leg.provider_pnr
         ):
@@ -575,10 +586,10 @@ class BookingCheckoutService:
         )
 
         if (
-            overall_status is BookingOverallStatus.PARTIAL
+            overall_status == BookingOverallStatus.PARTIAL
             and inbound_transform is not None
-            and outbound_transform.leg.leg_status is not BookingLegStatus.CONFIRMED
-            and inbound_transform.leg.leg_status is BookingLegStatus.CONFIRMED
+            and outbound_transform.leg.leg_status != BookingLegStatus.CONFIRMED
+            and inbound_transform.leg.leg_status == BookingLegStatus.CONFIRMED
             and not outbound_transform.leg.customer_message
         ):
             response.outbound_leg.customer_message = (
@@ -618,7 +629,7 @@ class BookingCheckoutService:
             outbound_transform.leg.leg_status,
             inbound_transform.leg.leg_status if inbound_transform else None,
         )
-        support_needed = overall_status is not BookingOverallStatus.CONFIRMED
+        support_needed = overall_status != BookingOverallStatus.CONFIRMED
         return BookingConfirmResponse(
             overall_status=overall_status,
             outbound_leg=outbound_transform.leg,

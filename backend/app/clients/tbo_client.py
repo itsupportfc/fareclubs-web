@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import time
 from datetime import datetime, timezone
 from enum import IntEnum
 from typing import Optional
@@ -8,6 +9,7 @@ from typing import Optional
 import httpx
 from app.clients.exceptions import ExternalProviderError
 from app.config import settings
+from app.core.logging import sanitize_for_logging, truncate_for_logging
 from pydantic import ValidationError
 
 from app.schemas.tbo import (
@@ -41,7 +43,8 @@ from app.schemas.tbo import (
 )
 from app.schemas.tbo.search import Itinerary
 
-logger = logging.getLogger(__name__)
+# Dedicated logger name routes to the tbo_file handler in logging config
+logger = logging.getLogger("app.integrations.tbo")
 
 
 class TBOParseError(Exception):
@@ -96,7 +99,96 @@ class TBOClient:
 
         self.headers = {
             "Content-Type": "application/json",
+            "Accept-Encoding": "gzip",
         }
+
+    def _log_tbo_request(self, *, operation: str, url: str, payload: dict) -> None:
+        log_payload: dict = {
+            "event": "tbo.request",
+            "operation": operation,
+            "url": url,
+        }
+        if settings.ENABLE_TBO_BODY_LOGGING:
+            log_payload["payload"] = sanitize_for_logging(payload)
+        logger.info(json.dumps(log_payload, default=str))
+
+    def _log_tbo_response(
+        self,
+        *,
+        operation: str,
+        url: str,
+        status_code: int,
+        elapsed_ms: float,
+        response_data: dict | None = None,
+        raw_text: str | None = None,
+    ) -> None:
+        # Always log metadata at INFO
+        log_meta = {
+            "event": "tbo.response",
+            "operation": operation,
+            "url": url,
+            "status_code": status_code,
+            "duration_ms": round(elapsed_ms, 2),
+        }
+        logger.info(json.dumps(log_meta, default=str))
+
+        # Log response body at DEBUG only (can be very large for search responses)
+        if settings.ENABLE_TBO_BODY_LOGGING and logger.isEnabledFor(logging.DEBUG):
+            body_payload: dict = {"event": "tbo.response.body", "operation": operation}
+            if response_data is not None:
+                body_payload["body"] = sanitize_for_logging(response_data)
+            elif raw_text is not None:
+                body_payload["body"] = truncate_for_logging(
+                    raw_text, settings.LOG_MAX_BODY_CHARS
+                )
+            logger.debug(json.dumps(body_payload, default=str))
+
+    async def _post_tbo_json(
+        self,
+        *,
+        operation: str,
+        url: str,
+        payload_data: dict,
+        timeout: float,
+    ) -> dict:
+        self._log_tbo_request(operation=operation, url=url, payload=payload_data)
+
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            started = time.perf_counter()
+            resp = await client.post(url, json=payload_data, headers=self.headers)
+            elapsed_ms = (time.perf_counter() - started) * 1000
+
+        if resp.status_code != 200:
+            self._log_tbo_response(
+                operation=operation,
+                url=url,
+                status_code=resp.status_code,
+                elapsed_ms=elapsed_ms,
+                raw_text=resp.text,
+            )
+            raise Exception(f"{operation} failed (HTTP {resp.status_code})")
+
+        try:
+            data = resp.json()
+        except Exception as e:
+            self._log_tbo_response(
+                operation=operation,
+                url=url,
+                status_code=resp.status_code,
+                elapsed_ms=elapsed_ms,
+                raw_text=resp.text,
+            )
+            logger.exception("Invalid or unexpected JSON in %s response", operation)
+            raise Exception(f"Invalid response from {operation}") from e
+
+        self._log_tbo_response(
+            operation=operation,
+            url=url,
+            status_code=resp.status_code,
+            elapsed_ms=elapsed_ms,
+            response_data=data,
+        )
+        return data
 
     async def authenticate(self) -> str:
         """
@@ -121,21 +213,15 @@ class TBOClient:
                 Password=settings.TBO_PASSWORD,
                 EndUserIp=settings.TBO_END_USER_IP,
             )
-
-            async with httpx.AsyncClient(timeout=30) as client:
-                resp = await client.post(
-                    f"{self.shared_base_url}/Authenticate",
-                    json=payload.model_dump(by_alias=True, exclude_none=True),
-                    headers=self.headers,
-                )
-
-            # --- Handle errors ---
-            if resp.status_code != 200:
-                logger.error(f"TBO Auth HTTP {resp.status_code}: {resp.text}")
-                raise Exception(f"TBO authentication failed (HTTP {resp.status_code})")
+            payload_data = payload.model_dump(by_alias=True, exclude_none=True, mode="json")
+            data = await self._post_tbo_json(
+                operation="TBO Authenticate",
+                url=f"{self.shared_base_url}/Authenticate",
+                payload_data=payload_data,
+                timeout=30,
+            )
 
             try:
-                data = resp.json()
                 parsed = TBOAuthResponse(**data)
             except Exception as e:
                 logger.exception("Invalid or unexpected JSON in TBO response")
@@ -148,7 +234,7 @@ class TBOClient:
                     if parsed.Error
                     else "Unknown authentication error"
                 )
-                logger.error(f"TBO Auth failed: {error_msg}")
+                logger.error("TBO Auth failed: %s", error_msg)
                 raise Exception(f"TBO Auth Error: {error_msg}")
 
             # --- Cache the token until midnight ---
@@ -183,27 +269,23 @@ class TBOClient:
             TokenMemberId=self._cached_member_id,  # type: ignore
             TokenId=self._cached_token,  # type: ignore
         )
-
-        async with httpx.AsyncClient(timeout=30) as client:
-            resp = await client.post(
-                f"{self.shared_base_url}/Logout",
-                json=payload.model_dump(by_alias=True, exclude_none=True),
-                headers=self.headers,
-            )
-
-        if resp.status_code != 200:
-            logger.error(f"TBO Logout HTTP {resp.status_code}:{resp.text}")
-            raise Exception(f"TBO logout failed (HTTP {resp.status_code})")
+        payload_data = payload.model_dump(by_alias=True, exclude_none=True, mode="json")
+        data = await self._post_tbo_json(
+            operation="TBO Logout",
+            url=f"{self.shared_base_url}/Logout",
+            payload_data=payload_data,
+            timeout=30,
+        )
 
         try:
-            parsed = TBOLogoutResponse(**resp.json())
+            parsed = TBOLogoutResponse(**data)
         except Exception as e:
             logger.exception("Invalid or unexpected JSON in TBO logout response")
             raise Exception("Invalid logout response from TBO") from e
 
         if parsed.Status != 1 or parsed.Error.ErrorCode != 0:
             error_msg = parsed.Error.ErrorMessage or "Unknown logout error"
-            logger.error(f"TBO Logout failed: {error_msg}")
+            logger.error("TBO Logout failed: %s", error_msg)
             raise Exception(f"TBO Logout Error: {error_msg}")
 
         # clear cached data
@@ -259,28 +341,14 @@ class TBOClient:
         payload_data["TokenId"] = token
 
         url = f"{self.air_base_url}/Search"
-        self.headers["Accept-Encoding"] = "gzip"
 
-        logger.info("→ TBO /Search called")
-        logger.info("Request payload: %s", json.dumps(payload_data, indent=2))
-
-        async with httpx.AsyncClient(timeout=360) as client:
-            resp = await client.post(
-                url,
-                json=payload_data,
-                headers=self.headers,
-            )
-
-        if resp.status_code != 200:
-            logger.error(f"TBO Search HTTP {resp.status_code}: {resp.text}")
-            raise Exception(f"TBO search failed (HTTP {resp.status_code})")
-
-        # httpx automatically decompresses gzip, so just parse JSON directly
-
-        # try to parse the response
         try:
-            data = resp.json()
-            # logger.info("TBO Search response: %s", json.dumps(data, indent=2))
+            data = await self._post_tbo_json(
+                operation="TBO Search",
+                url=url,
+                payload_data=payload_data,
+                timeout=360,
+            )
             self._check_response_status(data, context="TBO Search")
         except ExternalProviderError:
             raise
@@ -336,28 +404,12 @@ class TBOClient:
         payload_data["TokenId"] = token
 
         url = f"{self.air_base_url}/FareRule"
-        self.headers["Accept-Encoding"] = "gzip"
-
-        logger.info("→ TBO /FareRule called")
-        logger.info("Request payload: %s", json.dumps(payload_data, indent=2))
-
-        async with httpx.AsyncClient(timeout=60) as client:
-            resp = await client.post(
-                url,
-                json=payload_data,
-                headers=self.headers,
-            )
-
-        if resp.status_code != 200:
-            logger.error(f"TBO FareRule HTTP {resp.status_code}: {resp.text}")
-            raise Exception(f"TBO FareRule failed (HTTP {resp.status_code})")
-
-        # httpx automatically decompresses gzip, so just parse JSON directly
-        try:
-            data = resp.json()
-        except Exception as e:
-            logger.exception("Invalid or unexpected JSON in TBO FareRule response")
-            raise Exception("Invalid response from TBO") from e
+        data = await self._post_tbo_json(
+            operation="TBO FareRule",
+            url=url,
+            payload_data=payload_data,
+            timeout=60,
+        )
 
         # try to parse the response
         try:
@@ -377,29 +429,12 @@ class TBOClient:
         payload_data["TokenId"] = token
 
         url = f"{self.air_base_url}/FareQuote"
-        self.headers["Accept-Encoding"] = "gzip"
-
-        logger.info("→ TBO /FareQuote called")
-        logger.info("Request payload: %s", json.dumps(payload_data, indent=2))
-
-        async with httpx.AsyncClient(timeout=60) as client:
-            resp = await client.post(
-                url,
-                json=payload_data,
-                headers=self.headers,
-            )
-
-        if resp.status_code != 200:
-            logger.error(f"TBO FareQuote HTTP {resp.status_code}: {resp.text}")
-            raise Exception(f"TBO FareQuote failed (HTTP {resp.status_code})")
-
-        # httpx automatically decompresses gzip, so just parse JSON directly
-        try:
-            data = resp.json()
-            logger.info("TBO FareQuote response: %s", json.dumps(data, indent=2))
-        except Exception as e:
-            logger.exception("Invalid or unexpected JSON in TBO FareQuote response")
-            raise Exception("Invalid response from TBO") from e
+        data = await self._post_tbo_json(
+            operation="TBO FareQuote",
+            url=url,
+            payload_data=payload_data,
+            timeout=60,
+        )
 
         # try to parse the response
         try:
@@ -416,34 +451,14 @@ class TBOClient:
         payload_data["TokenId"] = token
 
         url = f"{self.air_base_url}/SSR"
-        self.headers["Accept-Encoding"] = "gzip"
+        data = await self._post_tbo_json(
+            operation="TBO SSR",
+            url=url,
+            payload_data=payload_data,
+            timeout=60,
+        )
 
-        logger.info("→ TBO /SSR called")
-        logger.info("Request payload: %s", json.dumps(payload_data, indent=2))
-
-        async with httpx.AsyncClient(timeout=60) as client:
-            resp = await client.post(
-                url,
-                json=payload_data,
-                headers=self.headers,
-            )
-
-        if resp.status_code != 200:
-            logger.error(f"TBO SSR HTTP {resp.status_code}: {resp.text}")
-            raise Exception(f"TBO SSR failed (HTTP {resp.status_code})")
-
-        # httpx automatically decompresses gzip, so just parse JSON directly
         try:
-            data = resp.json()
-            logger.info("TBO SSR response: %s", json.dumps(data, indent=2))
-        except Exception as e:
-            logger.exception("Invalid or unexpected JSON in TBO SSR response")
-            raise Exception("Invalid response from TBO") from e
-
-        # try to parse the response
-        try:
-            logger.debug("TBO SSR request: %s", json.dumps(payload_data, indent=2))
-            # logger.info("TBO SSR response: %s", json.dumps(data, indent=2))
             self._check_response_status(data, context="TBO SSR")
 
             parsed = TBOSSRResponse(**data)
@@ -459,30 +474,12 @@ class TBOClient:
         payload_data["TokenId"] = token
 
         url = f"{self.air_base_url}/Book"
-        self.headers["Accept-Encoding"] = "gzip"
-
-        logger.info("→ TBO /Book called")
-        safe_payload = {k: v for k, v in payload_data.items() if k != "TokenId"}
-        logger.info("TBO Book request: %s", json.dumps(safe_payload, indent=2))
-
-        async with httpx.AsyncClient(timeout=300) as client:
-            resp = await client.post(
-                url,
-                json=payload_data,
-                headers=self.headers,
-            )
-
-        if resp.status_code != 200:
-            logger.error(f"TBO Book HTTP {resp.status_code}: {resp.text}")
-            raise Exception(f"TBO Book failed (HTTP {resp.status_code})")
-
-        # httpx automatically decompresses gzip, so just parse JSON directly
-        try:
-            data = resp.json()
-            logger.info("TBO Book response: %s", json.dumps(data, indent=2))
-        except Exception as e:
-            logger.exception("Invalid or unexpected JSON in TBO Book response")
-            raise Exception("Invalid response from TBO") from e
+        data = await self._post_tbo_json(
+            operation="TBO Book",
+            url=url,
+            payload_data=payload_data,
+            timeout=300,
+        )
 
         # try to parse the response
         try:
@@ -504,30 +501,12 @@ class TBOClient:
         payload_data["TokenId"] = token
 
         url = f"{self.air_base_url}/Ticket"
-        self.headers["Accept-Encoding"] = "gzip"
-
-        logger.info("→ TBO /Ticket (LCC) called")
-        safe_payload = {k: v for k, v in payload_data.items() if k != "TokenId"}
-        logger.info("TBO TicketLCC request: %s", json.dumps(safe_payload, indent=2))
-
-        async with httpx.AsyncClient(timeout=300) as client:
-            resp = await client.post(
-                url,
-                json=payload_data,
-                headers=self.headers,
-            )
-
-        if resp.status_code != 200:
-            logger.error(f"TBO TicketLCC HTTP {resp.status_code}: {resp.text}")
-            raise Exception(f"TBO TicketLCC failed (HTTP {resp.status_code})")
-
-        # httpx automatically decompresses gzip, so just parse JSON directly
-        try:
-            data = resp.json()
-            logger.info("TBO TicketLCC response: %s", json.dumps(data, indent=2))
-        except Exception as e:
-            logger.exception("Invalid or unexpected JSON in TBO TicketLCC response")
-            raise Exception("Invalid response from TBO") from e
+        data = await self._post_tbo_json(
+            operation="TBO TicketLCC",
+            url=url,
+            payload_data=payload_data,
+            timeout=300,
+        )
 
         # try to parse the response
         try:
@@ -549,30 +528,12 @@ class TBOClient:
         payload_data["TokenId"] = token
 
         url = f"{self.air_base_url}/Ticket"
-        self.headers["Accept-Encoding"] = "gzip"
-
-        logger.info("→ TBO /Ticket (NonLCC) called")
-        safe_payload = {k: v for k, v in payload_data.items() if k != "TokenId"}
-        logger.info("TBO TicketNonLCC request: %s", json.dumps(safe_payload, indent=2))
-
-        async with httpx.AsyncClient(timeout=300) as client:
-            resp = await client.post(
-                url,
-                json=payload_data,
-                headers=self.headers,
-            )
-
-        if resp.status_code != 200:
-            logger.error(f"TBO TicketNonLCC HTTP {resp.status_code}: {resp.text}")
-            raise Exception(f"TBO TicketNonLCC failed (HTTP {resp.status_code})")
-
-        # httpx automatically decompresses gzip, so just parse JSON directly
-        try:
-            data = resp.json()
-            logger.info("TBO TicketNonLCC response: %s", json.dumps(data, indent=2))
-        except Exception as e:
-            logger.exception("Invalid or unexpected JSON in TBO TicketNonLCC response")
-            raise Exception("Invalid response from TBO") from e
+        data = await self._post_tbo_json(
+            operation="TBO TicketNonLCC",
+            url=url,
+            payload_data=payload_data,
+            timeout=300,
+        )
 
         # try to parse the response
         try:
@@ -674,29 +635,15 @@ class TBOClient:
         payload_data["TokenId"] = token
 
         url = f"{self.air_base_url}/GetBookingDetails"
-        self.headers["Accept-Encoding"] = "gzip"
-
-        async with httpx.AsyncClient(timeout=60) as client:
-            resp = await client.post(
-                url,
-                json=payload_data,
-                headers=self.headers,
-            )
-
-        if resp.status_code != 200:
-            logger.error(f"TBO GetPNRDetails HTTP {resp.status_code}: {resp.text}")
-            raise Exception(f"TBO GetPNRDetails failed (HTTP {resp.status_code})")
-
-        # httpx automatically decompresses gzip, so just parse JSON directly
-        try:
-            data = resp.json()
-        except Exception as e:
-            logger.exception("Invalid or unexpected JSON in TBO GetPNRDetails response")
-            raise Exception("Invalid response from TBO") from e
+        data = await self._post_tbo_json(
+            operation="TBO GetBookingDetails",
+            url=url,
+            payload_data=payload_data,
+            timeout=60,
+        )
 
         # try to parse the response
         try:
-            # print(data)
             parsed = TBOGetBookingDetailsResponse(**data)
             return parsed
         except Exception as e:

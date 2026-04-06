@@ -159,12 +159,12 @@ def derive_overall_booking_status(
     """
 
     if inbound_leg_status is None:
-        if outbound_leg_status is BookingLegStatus.CONFIRMED:
+        if outbound_leg_status == BookingLegStatus.CONFIRMED:
             return BookingOverallStatus.CONFIRMED
         return BookingOverallStatus.PENDING
 
     confirmed_count = sum(
-        status is BookingLegStatus.CONFIRMED
+        status == BookingLegStatus.CONFIRMED
         for status in (outbound_leg_status, inbound_leg_status)
     )
     if confirmed_count == 2:

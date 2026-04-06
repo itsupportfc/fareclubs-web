@@ -31,8 +31,19 @@ class Settings(BaseSettings):
     SMTP_FROM_EMAIL: str = ""
     STAFF_ALERT_EMAILS: str = ""  # comma-separated
 
+    APP_ENV: str = "development"
+    LOG_LEVEL: str = "INFO"
+    LOG_RETENTION_DAYS: int = 14
+    LOG_MAX_BODY_CHARS: int = 12000
+    ENABLE_CONSOLE_LOGGING: bool = True
+    ENABLE_HTTP_BODY_LOGGING: bool = True
+    ENABLE_TBO_BODY_LOGGING: bool = True
+    LOG_REDACT_FIELDS: str = ""
+
     BACKEND_LOG_DIR: str | None = None
     BACKEND_LOG_FILE: str | None = None
+    INTERNAL_API_LOG_FILE: str | None = None
+    TBO_LOG_FILE: str | None = None
 
     class Config:
         env_file = Path(__file__).resolve().parent.parent / ".env"
