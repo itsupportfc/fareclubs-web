@@ -119,29 +119,88 @@ export default function BookingConfirmationPage() {
     );
   }
 
-  const isPending = booking.status === "pending";
-  const isPartial = booking.status === "partial";
-  const isConfirmed = booking.status === "confirmed";
+  // New API contract: prefer nested legs. Keep a fallback bridge so rollout is safe.
+  const bookingStatus = booking.overallStatus ?? booking.status;
+  const bookingPaymentId = booking.paymentId ?? booking.razorpayPaymentId;
+
+  const isPending = bookingStatus === "pending";
+  const isPartial = bookingStatus === "partial";
+  const isConfirmed = bookingStatus === "confirmed";
+
+  const outboundLeg =
+    booking.outboundLeg ?? {
+      legDirection: "outbound",
+      legStatus: booking.status === "pending" ? "pending" : "confirmed",
+      bookingRecordId: booking.bookingId,
+      providerBookingId: booking.providerBookingId,
+      providerPnr: booking.pnr,
+      providerTicketStatus: booking.ticketStatus,
+      providerSsrDenied: booking.ssrDenied,
+      providerSsrMessage: booking.ssrMessage,
+      providerPriceChanged: booking.isPriceChanged,
+      providerTimeChanged: booking.isTimeChanged,
+      invoiceNo: booking.invoiceNo,
+      invoiceAmount: booking.invoiceAmount,
+      customerMessage: booking.errorMessage,
+      segmentBaggage: booking.segmentBaggage,
+      fareBreakdown: booking.fareBreakdown,
+      miniFareRules: booking.miniFareRules,
+    };
+
+  const inboundLeg =
+    booking.inboundLeg ??
+    (booking.pnrInbound || booking.bookingIdInbound || booking.inboundStatus
+      ? {
+          legDirection: "inbound",
+          legStatus: booking.inboundStatus,
+          bookingRecordId: booking.bookingIdInbound,
+          providerBookingId: booking.providerBookingIdInbound,
+          providerPnr: booking.pnrInbound,
+          customerMessage: booking.inboundErrorMessage,
+        }
+      : null);
 
   const legs =
     outboundFlight?.segments?.flatMap((s) => s.segments || [s]) || [];
 
   const passengers = booking.passengers || [];
-  const fareBreakdown = booking.fareBreakdown;
-  const segmentBaggage = booking.segmentBaggage || [];
-  const miniFareRules = booking.miniFareRules || [];
+  const fareBreakdown =
+    outboundLeg?.fareBreakdown ?? inboundLeg?.fareBreakdown ?? null;
+  const segmentBaggage =
+    outboundLeg?.segmentBaggage ?? inboundLeg?.segmentBaggage ?? [];
+  const miniFareRules =
+    outboundLeg?.miniFareRules ?? inboundLeg?.miniFareRules ?? [];
+
+  const failedLeg =
+    outboundLeg?.legStatus === "failed"
+      ? outboundLeg
+      : inboundLeg?.legStatus === "failed"
+        ? inboundLeg
+        : null;
+
+  const hasPriceOrTimeNotice = [outboundLeg, inboundLeg].some(
+    (leg) => leg?.providerPriceChanged || leg?.providerTimeChanged,
+  );
+
+  const ssrNoticeLeg = [outboundLeg, inboundLeg].find(
+    (leg) => leg?.providerSsrDenied,
+  );
 
   const handleDownloadEticket = async () => {
-    if (!booking.bookingId || !booking.pnr) {
+    // Use the internal booking record id for your e-ticket endpoint.
+    if (!outboundLeg?.bookingRecordId || !outboundLeg?.providerPnr) {
       return;
     }
     setDownloading(true);
     try {
-      const blob = await downloadEticketAPI(booking.bookingId, booking.pnr);
+      const blob = await downloadEticketAPI(
+        outboundLeg.bookingRecordId,
+        outboundLeg.providerPnr,
+      );
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `FareClubs_ETicket_${booking.pnr}.pdf`;
+      a.download = `FareClubs_ETicket_${outboundLeg.providerPnr}.pdf`;
       a.click();
       URL.revokeObjectURL(url);
     } catch (err) {
@@ -152,8 +211,8 @@ export default function BookingConfirmationPage() {
   };
 
   const ticketStatusLabel =
-    TICKET_STATUS_LABELS[booking.ticketStatus] ||
-    `Status ${booking.ticketStatus}`;
+    TICKET_STATUS_LABELS[outboundLeg?.providerTicketStatus] ||
+    `Status ${outboundLeg?.providerTicketStatus ?? "--"}`;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -182,9 +241,9 @@ export default function BookingConfirmationPage() {
                 Your payment was successful. Our team is verifying your booking
                 with the airline and will confirm shortly.
               </p>
-              {booking.razorpayPaymentId && (
+              {bookingPaymentId && (
                 <p className="text-xs text-gray-400 mt-3 font-mono">
-                  Payment Ref: {booking.razorpayPaymentId}
+                  Payment Ref: {bookingPaymentId}
                 </p>
               )}
               {(booking.supportPhone || booking.supportEmail) && (
@@ -221,12 +280,12 @@ export default function BookingConfirmationPage() {
                   <CheckCircle2 className="w-7 h-7" />
                 </div>
                 <h1 className="font-display text-xl font-bold">
-                  {booking.inboundStatus === "failed"
+                  {inboundLeg?.legStatus === "failed"
                     ? "Outbound Flight Confirmed"
                     : "Return Flight Confirmed"}
                 </h1>
                 <p className="text-emerald-100 mt-1 text-sm">
-                  {booking.inboundStatus === "failed"
+                  {inboundLeg?.legStatus === "failed"
                     ? "Your outbound ticket has been issued."
                     : "Your return ticket has been issued."}
                 </p>
@@ -237,13 +296,12 @@ export default function BookingConfirmationPage() {
                   <AlertTriangle className="w-6 h-6 text-amber-500" />
                 </div>
                 <h2 className="font-display text-lg font-bold text-amber-700">
-                  {booking.inboundStatus === "failed"
+                  {inboundLeg?.legStatus === "failed"
                     ? "Return Flight Needs Attention"
                     : "Outbound Flight Needs Attention"}
                 </h2>
                 <p className="text-amber-600 mt-1 text-sm max-w-md mx-auto">
-                  {booking.inboundErrorMessage ||
-                    booking.errorMessage ||
+                  {failedLeg?.customerMessage ||
                     "One of your flights encountered an issue. Our team has been notified and will resolve this shortly."}
                 </p>
                 {(booking.supportPhone || booking.supportEmail) && (
@@ -307,29 +365,29 @@ export default function BookingConfirmationPage() {
               </p>
               <div className="flex items-center">
                 <span className="font-display text-2xl font-bold tracking-[0.2em]">
-                  {booking.pnr}
+                  {outboundLeg?.providerPnr}
                 </span>
-                {booking.pnr !== "PENDING" && (
-                  <CopyButton text={booking.pnr} />
+                {outboundLeg?.providerPnr !== "PENDING" && (
+                  <CopyButton text={outboundLeg?.providerPnr} />
                 )}
-                {booking.pnr === "PENDING" && (
+                {outboundLeg?.providerPnr === "PENDING" && (
                   <span className="ml-2 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-400/20 text-amber-200">
                     Processing
                   </span>
                 )}
               </div>
             </div>
-            {booking.pnrInbound && (
+            {inboundLeg?.providerPnr && (
               <div className="text-white">
                 <p className="text-[10px] uppercase tracking-widest text-blue-200">
                   Return PNR
                 </p>
                 <div className="flex items-center">
                   <span className="font-display text-2xl font-bold tracking-[0.2em]">
-                    {booking.pnrInbound}
+                    {inboundLeg?.providerPnr}
                   </span>
-                  {booking.pnrInbound !== "PENDING" ? (
-                    <CopyButton text={booking.pnrInbound} />
+                  {inboundLeg?.providerPnr !== "PENDING" ? (
+                    <CopyButton text={inboundLeg?.providerPnr} />
                   ) : (
                     <span className="ml-2 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-400/20 text-amber-200">
                       Processing
@@ -360,20 +418,32 @@ export default function BookingConfirmationPage() {
 
           {/* Details grid */}
           <div className="px-6 py-4 grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <DetailCell label="Booking ID" value={booking.bookingId} />
-            {booking.bookingIdInbound && (
+            <DetailCell label="Booking Ref" value={outboundLeg?.bookingRecordId} />
+            {inboundLeg?.bookingRecordId && (
               <DetailCell
-                label="Return Booking ID"
-                value={booking.bookingIdInbound}
+                label="Return Booking Ref"
+                value={inboundLeg?.bookingRecordId}
               />
             )}
-            {booking.invoiceNo && (
-              <DetailCell label="Invoice No" value={booking.invoiceNo} />
+            {outboundLeg?.providerBookingId != null && (
+              <DetailCell
+                label="Airline Booking ID"
+                value={outboundLeg.providerBookingId}
+              />
             )}
-            {booking.invoiceAmount != null && (
+            {inboundLeg?.providerBookingId != null && (
+              <DetailCell
+                label="Return Airline Booking ID"
+                value={inboundLeg.providerBookingId}
+              />
+            )}
+            {outboundLeg?.invoiceNo && (
+              <DetailCell label="Invoice No" value={outboundLeg?.invoiceNo} />
+            )}
+            {outboundLeg?.invoiceAmount != null && (
               <DetailCell
                 label="Invoice Amount"
-                value={`₹${currencyFmt(booking.invoiceAmount)}`}
+                value={`₹${currencyFmt(outboundLeg?.invoiceAmount)}`}
               />
             )}
           </div>
@@ -696,9 +766,7 @@ export default function BookingConfirmationPage() {
         )}
 
         {/* ── Notices ── */}
-        {(booking.isPriceChanged ||
-          booking.isTimeChanged ||
-          booking.ssrDenied) && (
+        {(hasPriceOrTimeNotice || ssrNoticeLeg?.providerSsrDenied) && (
           <motion.div
             custom={6}
             initial="hidden"
@@ -706,7 +774,7 @@ export default function BookingConfirmationPage() {
             variants={fadeUp}
             className="space-y-3"
           >
-            {(booking.isPriceChanged || booking.isTimeChanged) && (
+            {hasPriceOrTimeNotice && (
               <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-2xl p-4">
                 <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
                 <div>
@@ -714,16 +782,29 @@ export default function BookingConfirmationPage() {
                     Notice
                   </p>
                   <p className="text-sm text-amber-700 mt-0.5">
-                    {booking.isPriceChanged &&
-                      "The fare was updated by the airline during booking. "}
-                    {booking.isTimeChanged &&
-                      "The flight schedule was updated by the airline."}
+                    {[outboundLeg, inboundLeg]
+                      .filter(
+                        (leg) =>
+                          leg?.providerPriceChanged || leg?.providerTimeChanged,
+                      )
+                      .map((leg, index) => {
+                        const legLabel =
+                          leg?.legDirection === "inbound" ? "Return" : "Outbound";
+                        return (
+                          <span key={index}>
+                            {leg?.providerPriceChanged &&
+                              `${legLabel} fare was updated by the airline. `}
+                            {leg?.providerTimeChanged &&
+                              `${legLabel} flight schedule was updated by the airline. `}
+                          </span>
+                        );
+                      })}
                   </p>
                 </div>
               </div>
             )}
 
-            {booking.ssrDenied && (
+            {ssrNoticeLeg?.providerSsrDenied && (
               <div className="flex items-start gap-3 bg-orange-50 border border-orange-200 rounded-2xl p-4">
                 <Info className="w-5 h-5 text-orange-500 shrink-0 mt-0.5" />
                 <div>
@@ -731,7 +812,7 @@ export default function BookingConfirmationPage() {
                     SSR Notice
                   </p>
                   <p className="text-sm text-orange-700 mt-0.5">
-                    {booking.ssrMessage ||
+                    {ssrNoticeLeg?.providerSsrMessage ||
                       "Some ancillary requests (seat/meal/baggage) could not be confirmed by the airline."}
                   </p>
                 </div>

@@ -40,7 +40,11 @@ export function useRazorpayBooking(token) {
                 const createOrderPayload = {
                     fareIdOutbound: bookingPayload.fareIdOutbound,
                     fareIdInbound: bookingPayload.fareIdInbound ?? null,
-                    totalAmount: bookingPayload.totalAmount,
+                    tripType: bookingPayload.tripType,
+                    isInternationalReturn:
+                        bookingPayload.isInternationalReturn ?? false,
+                    // Explicitly named so backend can re-verify the client quote.
+                    clientTotalAmount: bookingPayload.totalAmount,
                 };
                 setProcessingStep(1); // "Securing your fare..."
                 const orderRes = await fetchWithTimeout(
@@ -77,10 +81,10 @@ export function useRazorpayBooking(token) {
 
             // 4. Open Razorpay checkout modal
             const rzp = new window.Razorpay({
-                key: orderData.razorpayKeyId,
-                amount: orderData.amount,
-                currency: orderData.currency,
-                order_id: orderData.razorpayOrderId,
+                key: orderData.razorpayPublicKey,
+                amount: orderData.paymentAmountPaise,
+                currency: orderData.paymentCurrency,
+                order_id: orderData.paymentOrderId,
                 name: "FareClubs",
                 description: "Flight Booking",
                 theme: { color: "#4F46E5" },
@@ -102,12 +106,12 @@ export function useRazorpayBooking(token) {
                         isInternationalReturn:
                             bookingPayload.isInternationalReturn ?? false,
                         passengers: bookingPayload.passengers,
-                        totalAmount: bookingPayload.totalAmount,
+                        clientTotalAmount: bookingPayload.totalAmount,
                         acceptPriceChange: false,
-                        // Razorpay payment proof — backend verifies this signature
-                        razorpayOrderId: response.razorpay_order_id,
-                        razorpayPaymentId: response.razorpay_payment_id,
-                        razorpaySignature: response.razorpay_signature,
+                        // Keep payment ids separate from booking ids.
+                        paymentOrderId: response.razorpay_order_id,
+                        paymentId: response.razorpay_payment_id,
+                        paymentSignature: response.razorpay_signature,
                     };
 
                     const confirmBooking = async (payload) => {
@@ -142,9 +146,14 @@ export function useRazorpayBooking(token) {
                     try {
                         setProcessingStep(1); // "Booking with airline..."
                         let booking = await confirmBooking(confirmPayload);
+                        const legs = [booking?.outboundLeg, booking?.inboundLeg].filter(Boolean);
                         const needsReconfirm =
-                            booking?.status === "pending" &&
-                            (booking?.isPriceChanged || booking?.isTimeChanged);
+                            booking?.overallStatus === "pending" &&
+                            legs.some(
+                                (leg) =>
+                                    leg?.providerPriceChanged ||
+                                    leg?.providerTimeChanged,
+                            );
 
                         if (needsReconfirm) {
                             const accepted = window.confirm(

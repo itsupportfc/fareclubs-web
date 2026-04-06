@@ -14,7 +14,12 @@
       "Bash(python -c \"from app.schemas.tbo.book import TBOBookRequest, BookPassenger; from app.schemas.tbo.common import SimpleMeal, Seat, Baggage; print\\(''book.py imports OK''\\)\")",
       "Bash(python -m venv .venv)",
       "Bash(.venv/Scripts/python -c \"from app.schemas.tbo.book import TBOBookRequest, BookPassenger; from app.schemas.tbo.common import SimpleMeal, Seat, Baggage; print\\(''''book.py imports OK''''\\)\")",
-      "Bash(.venv/Scripts/python -c \":*)"
+      "Bash(.venv/Scripts/python -c \":*)",
+      "Bash(find /d/CSE/Fareclubs/Projects/fareclubs-web/backend -name auth.py -o -name middleware* -type f)",
+      "WebFetch(domain:medium.com)",
+      "WebFetch(domain:www.geeksforgeeks.org)",
+      "WebFetch(domain:istywhyerlina.medium.com)",
+      "Bash(python:*)"
     ]
   }
 }

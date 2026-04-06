@@ -1,19 +1,25 @@
+"""Frontend-facing schemas for booking checkout.
+
+Design goals:
+- be explicit about *direction* with outbound_leg / inbound_leg
+- be explicit about *ownership* with provider_* vs booking_record_*
+- never overload one field with two meanings (the old booking_id bug)
 """
-Internal Booking Schemas
 
-Frontend-facing schemas for the 2-step booking flow:
-  1. POST /flights/booking/create-order  → BookingCreateOrderRequest / BookingCreateOrderResponse
-  2. POST /flights/booking/confirm       → BookingConfirmRequest / BookingConfirmResponse
-"""
+from __future__ import annotations
 
-from typing import Literal
-
+from app.domain.booking_enums import (
+    BookingLegStatus,
+    BookingOverallStatus,
+    LegDirection,
+    TripType,
+)
 from app.schemas.internal.base import InternalBaseSchema
 from pydantic import model_validator
 
 
 class PassengerFareInfo(InternalBaseSchema):
-    """Per-passenger fare details (from fare-quote response)."""
+    """Per-passenger fare details from fare quote."""
 
     currency: str = "INR"
     base_fare: float
@@ -26,9 +32,7 @@ class PassengerFareInfo(InternalBaseSchema):
 
 
 class SsrSelection(InternalBaseSchema):
-    """SSR codes selected by the user (from the SSR endpoint response).
-    The transformer enriches these codes into full TBO objects using the cached SSR data.
-    """
+    """SSR codes selected by the customer for one segment."""
 
     meal_code: str | None = None
     meal_description: str | None = None
@@ -38,24 +42,22 @@ class SsrSelection(InternalBaseSchema):
 
 
 class GstInfo(InternalBaseSchema):
-    """GST details for B2B invoicing. Only lead passenger carries these."""
-
     gst_company_name: str
-    gst_number: str  # 15-char GSTIN
+    gst_number: str
     gst_company_address: str | None = None
     gst_company_contact_number: str | None = None
     gst_company_email: str | None = None
 
 
 class PassengerInfo(InternalBaseSchema):
-    """Passenger details for booking."""
+    """Passenger details sent to the backend at confirm time."""
 
     title: str
     first_name: str
     last_name: str
-    pax_type: int  # 1=Adult, 2=Child, 3=Infant
-    date_of_birth: str  # "YYYY-MM-DD"
-    gender: int  # 1=Male, 2=Female
+    pax_type: int
+    date_of_birth: str
+    gender: int
     address_line1: str
     city: str
     country_code: str
@@ -66,138 +68,148 @@ class PassengerInfo(InternalBaseSchema):
     address_line2: str | None = None
     country_name: str | None = None
 
-    # Passport
     passport_no: str | None = None
-    passport_expiry: str | None = None  # "YYYY-MM-DD"
+    passport_expiry: str | None = None
     is_passport_required: bool | None = None
-    # Full passport details (when IsPassportRequiredAtTicket=true)
-    passport_issue_date: str | None = None  # "YYYY-MM-DD"
-    passport_issue_country_code: str | None = None  # 2-letter ISO
+    passport_issue_date: str | None = None
+    passport_issue_country_code: str | None = None
 
-    # PAN card (Indian domestic flights when IsPanRequiredAtBook=true)
-    pan: str | None = None  # 10-char e.g. "ABCDE1234F"
-
-    # GST (lead pax only, when GSTAllowed=true)
+    pan: str | None = None
     gst: GstInfo | None = None
 
     fare: PassengerFareInfo
-    ssr: SsrSelection | None = None  # DEPRECATED — backward compat only
+    ssr: SsrSelection | None = None
     ssr_segments_outbound: list[SsrSelection | None] | None = None
     ssr_segments_inbound: list[SsrSelection | None] | None = None
 
     @model_validator(mode="after")
-    def normalize_ssr(self):
-        """Backward compat: if old `ssr` field sent, treat as single outbound segment."""
+    def normalize_legacy_ssr_field(self):
+        """Backward compatibility for old frontend payloads.
+
+        If the old single `ssr` field is present, treat it as a one-segment outbound
+        SSR selection so old clients do not break instantly.
+        """
+
         if not self.ssr_segments_outbound and self.ssr:
             self.ssr_segments_outbound = [self.ssr]
         return self
 
 
-# ==============================================================================
-# STEP 1: Create Razorpay Order
-# ==============================================================================
-
-
 class BookingCreateOrderRequest(InternalBaseSchema):
-    """Only the fields needed to create a Razorpay Order."""
+    """Step 1 of checkout: create a Razorpay order for verified fares."""
 
     fare_id_outbound: str
     fare_id_inbound: str | None = None
-    # trip_type: Literal["oneway", "roundtrip"]
-    # is_international_return: bool = False
-    # passengers: list[PassengerInfo]
-    total_amount: float
+    trip_type: TripType = TripType.ONEWAY
+    is_international_return: bool = False
+    client_total_amount: float
 
 
 class BookingCreateOrderResponse(InternalBaseSchema):
-    razorpay_order_id: str
-    amount: int  # paise
-    currency: str  # "INR"
-    razorpay_key_id: str
-    # The expected total (mirrors what the server verified) — lets frontend cross-check
-    verified_amount: float
+    """Explicit payment naming so frontend never confuses payment/order IDs."""
 
-
-# ==============================================================================
-# STEP 2: Confirm Booking (after payment)
-# ==============================================================================
+    payment_order_id: str
+    payment_amount_paise: int
+    payment_currency: str
+    razorpay_public_key: str
+    verified_total_amount: float
 
 
 class BookingConfirmRequest(InternalBaseSchema):
+    """Step 2 of checkout: confirm booking after payment completion."""
+
     fare_id_outbound: str
     fare_id_inbound: str | None = None
-    trip_type: Literal["oneway", "roundtrip"]
+    trip_type: TripType
     is_international_return: bool = False
     passengers: list[PassengerInfo]
-    total_amount: float
+    client_total_amount: float
     accept_price_change: bool = False
-    razorpay_order_id: str
-    razorpay_payment_id: str
-    razorpay_signature: str
+
+    payment_order_id: str
+    payment_id: str
+    payment_signature: str
 
 
 class ConfirmPassengerInfo(InternalBaseSchema):
-    """Passenger info returned in booking confirmation."""
-
     title: str
     first_name: str
     last_name: str
-    pax_type: int  # 1=Adult, 2=Child, 3=Infant
+    pax_type: int
     ticket_number: str | None = None
     email: str | None = None
     contact_no: str | None = None
-    seat_numbers: list[str | None] | None = None  # confirmed seat per segment e.g. ["31H", "73G"]
+    seat_numbers: list[str | None] | None = None
 
 
 class SegmentBaggageInfo(InternalBaseSchema):
-    """Per-segment confirmed info from ticket response (based on first passenger)."""
-
     fare_basis: str | None = None
-    baggage: str | None = None  # e.g. "2 Piece(s)"
-    cabin_baggage: str | None = None  # e.g. "Hand Luggage"
-    meal: str | None = None  # e.g. "Included" or meal name
+    baggage: str | None = None
+    cabin_baggage: str | None = None
+    meal: str | None = None
 
 
 class FareBreakdownInfo(InternalBaseSchema):
-    """Overall fare breakdown for the booking."""
-
     currency: str = "INR"
     base_fare: float
     tax: float
     total_fare: float
-    tax_breakup: list[dict] | None = None  # [{key, value}]
+    tax_breakup: list[dict] | None = None
 
 
 class MiniFareRuleInfo(InternalBaseSchema):
-    """Mini fare rule (cancellation/reissue policy)."""
-
     journey_points: str
-    type: str  # "Cancellation" | "Reissue"
+    type: str
     details: str | None = None
 
 
-class BookingConfirmResponse(InternalBaseSchema):
-    pnr: str
-    booking_id: int
-    is_lcc: bool
-    ticket_status: int
-    ssr_denied: bool
-    ssr_message: str | None = None
+class BookingConfirmationLeg(InternalBaseSchema):
+    """One leg of the final booking response.
+
+    Naming rules:
+    - booking_record_* => our DB row / internal identifiers
+    - provider_* => values created by TBO / airline side
+    - customer_message => human-readable message safe to show directly in UI
+    """
+
+    leg_direction: LegDirection
+    leg_status: BookingLegStatus
+
+    booking_record_id: int | None = None
+    provider_booking_id: int | None = None
+    provider_pnr: str | None = None
+    provider_is_lcc: bool | None = None
+    provider_ticket_status: int | None = None
+    provider_ssr_denied: bool | None = None
+    provider_ssr_message: str | None = None
+    provider_price_changed: bool = False
+    provider_time_changed: bool = False
+    provider_raw_available: bool = False
+
     invoice_no: str | None = None
     invoice_amount: float | None = None
-    pnr_inbound: str | None = None
-    booking_id_inbound: int | None = None
-    is_price_changed: bool = False
-    is_time_changed: bool = False
-    status: Literal["confirmed", "pending", "partial"] = "confirmed"
-    inbound_status: Literal["confirmed", "failed", "pending"] | None = None
-    inbound_error_message: str | None = None
-    support_phone: str | None = None
-    support_email: str | None = None
-    error_message: str | None = None
-    razorpay_payment_id: str | None = None
-    razorpay_order_id: str | None = None
-    passengers: list[ConfirmPassengerInfo] | None = None
+    customer_message: str | None = None
+
     segment_baggage: list[SegmentBaggageInfo] | None = None
     fare_breakdown: FareBreakdownInfo | None = None
     mini_fare_rules: list[MiniFareRuleInfo] | None = None
+
+
+class BookingConfirmResponse(InternalBaseSchema):
+    """Trip-level booking confirmation response.
+
+    Important: outbound_leg / inbound_leg remove the need for dozens of ambiguous
+    *_outbound / *_inbound primitives while staying explicit and frontend-friendly.
+    """
+
+    overall_status: BookingOverallStatus
+    outbound_leg: BookingConfirmationLeg
+    inbound_leg: BookingConfirmationLeg | None = None
+
+    passengers: list[ConfirmPassengerInfo] | None = None
+
+    support_phone: str | None = None
+    support_email: str | None = None
+
+    payment_order_id: str | None = None
+    payment_id: str | None = None

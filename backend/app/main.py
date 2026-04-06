@@ -3,7 +3,7 @@ import logging.config
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from app.api.v1 import airports, auth, flight
+from app.api.v1 import airports, auth, flight, flight_booking
 from app.clients.exceptions import ExternalProviderError
 from app.config import settings
 from app.utils.cache import FlightCache, flight_cache, get_flight_cache
@@ -131,6 +131,7 @@ async def external_provider_exception_handler(request, exc: ExternalProviderErro
 
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(flight.router, prefix="/api/v1")
+app.include_router(flight_booking.router, prefix="/api/v1")
 app.include_router(airports.router, prefix="/api/v1")
 
 
