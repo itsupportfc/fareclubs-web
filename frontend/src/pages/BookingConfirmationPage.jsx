@@ -337,32 +337,35 @@ export default function BookingConfirmationPage() {
     (leg) => leg?.providerSsrDenied,
   );
 
-  const ticketStatusLabel =
-    TICKET_STATUS_LABELS[booking.ticketStatus] ||
-    `Status ${booking.ticketStatus}`;
+  const failedLeg =
+    outboundLeg?.legStatus === "failed"
+      ? outboundLeg
+      : inboundLeg?.legStatus === "failed"
+        ? inboundLeg
+        : null;
 
   const handleDownloadEticket = async ({
-  bookingId,
-  pnr,
-  fileLabel = "ETicket",
-}) => {
-  if (!bookingId || !pnr || pnr === "PENDING") return;
+    bookingId,
+    pnr,
+    fileLabel = "ETicket",
+  }) => {
+    if (!bookingId || !pnr || pnr === "PENDING") return;
 
-  setDownloading(true);
-  try {
-    const blob = await downloadEticketAPI(bookingId, pnr);
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `FareClubs_${fileLabel}_${pnr}.pdf`;
-    a.click();
-    URL.revokeObjectURL(url);
-  } catch (err) {
-    console.error("[ETicket] Download failed:", err.message);
-  } finally {
-    setDownloading(false);
-  }
-};
+    setDownloading(true);
+    try {
+      const blob = await downloadEticketAPI(bookingId, pnr);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `FareClubs_${fileLabel}_${pnr}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("[ETicket] Download failed:", err.message);
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -373,9 +376,7 @@ export default function BookingConfirmationPage() {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-32 pb-16">
         <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
-          {/* LEFT COLUMN */}
           <div className="xl:col-span-8 space-y-6">
-            {/* Status Banner */}
             <motion.div
               custom={0}
               initial="hidden"
@@ -395,9 +396,9 @@ export default function BookingConfirmationPage() {
                     booking with the airline and will confirm shortly.
                   </p>
 
-                  {booking.razorpayPaymentId && (
+                  {bookingPaymentId && (
                     <p className="text-xs text-gray-400 mt-3 font-mono break-all">
-                      Payment Ref: {booking.razorpayPaymentId}
+                      Payment Ref: {bookingPaymentId}
                     </p>
                   )}
 
@@ -434,12 +435,12 @@ export default function BookingConfirmationPage() {
                       <CheckCircle2 className="w-7 h-7" />
                     </div>
                     <h1 className="font-display text-xl font-bold">
-                      {booking.inboundStatus === "failed"
+                      {inboundLeg?.legStatus === "failed"
                         ? "Outbound Flight Confirmed"
                         : "Return Flight Confirmed"}
                     </h1>
                     <p className="text-emerald-100 mt-1 text-sm">
-                      {booking.inboundStatus === "failed"
+                      {inboundLeg?.legStatus === "failed"
                         ? "Your outbound ticket has been issued."
                         : "Your return ticket has been issued."}
                     </p>
@@ -450,41 +451,14 @@ export default function BookingConfirmationPage() {
                       <AlertTriangle className="w-6 h-6 text-amber-500" />
                     </div>
                     <h2 className="font-display text-lg font-bold text-amber-700">
-                      {booking.inboundStatus === "failed"
+                      {inboundLeg?.legStatus === "failed"
                         ? "Return Flight Needs Attention"
                         : "Outbound Flight Needs Attention"}
                     </h2>
                     <p className="text-amber-600 mt-1 text-sm max-w-md mx-auto">
-                      {booking.inboundErrorMessage ||
-                        booking.errorMessage ||
+                      {failedLeg?.customerMessage ||
                         "One of your flights encountered an issue. Our team has been notified and will resolve this shortly."}
                     </p>
-
-                    {(booking.supportPhone || booking.supportEmail) && (
-                      <div className="mt-4 inline-flex flex-col gap-2 bg-amber-100 border border-amber-200 rounded-xl px-5 py-3 text-sm text-left">
-                        <p className="font-semibold text-amber-800 text-xs uppercase tracking-wide">
-                          Need help?
-                        </p>
-                        {booking.supportPhone && (
-                          <a
-                            href={`tel:${booking.supportPhone}`}
-                            className="flex items-center gap-2 text-amber-700 hover:underline"
-                          >
-                            <Phone className="w-3.5 h-3.5" />
-                            {booking.supportPhone}
-                          </a>
-                        )}
-                        {booking.supportEmail && (
-                          <a
-                            href={`mailto:${booking.supportEmail}`}
-                            className="flex items-center gap-2 text-amber-700 hover:underline break-all"
-                          >
-                            <Mail className="w-3.5 h-3.5" />
-                            {booking.supportEmail}
-                          </a>
-                        )}
-                      </div>
-                    )}
                   </div>
                 </Card>
               ) : (
@@ -571,24 +545,22 @@ export default function BookingConfirmationPage() {
                         pax.inboundSeatNumbers?.filter(Boolean).join(" · ") ||
                         "--";
 
-                      return (
-                        <div
-                          key={i}
-                          className="rounded-xl border border-gray-100 bg-gray-50 p-4"
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <div>
-                              <p className="font-semibold text-gray-900">
-                                {pax.title} {pax.firstName} {pax.lastName}
-                              </p>
-                              <p className="text-xs text-gray-500 mt-1">
-                                {PAX_LABELS[pax.paxType] || "Adult"}
-                              </p>
-                            </div>
-                            <span className="text-xs text-gray-400">
-                              #{i + 1}
-                            </span>
-                          </div>
+          return (
+            <div
+              key={i}
+              className="rounded-xl border border-gray-100 bg-gray-50 p-4"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="font-semibold text-gray-900">
+                    {pax.title} {pax.firstName} {pax.lastName}
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {PAX_LABELS[pax.paxType] || "Adult"}
+                  </p>
+                </div>
+                <span className="text-xs text-gray-400">#{i + 1}</span>
+              </div>
 
                           <div className="mt-3 space-y-1.5 text-xs text-gray-600">
                             <p>Outbound PNR: {outboundLeg?.providerPnr || "--"}</p>
@@ -676,10 +648,7 @@ export default function BookingConfirmationPage() {
               </motion.div>
             )}
 
-            {/* Notices */}
-            {(booking.isPriceChanged ||
-              booking.isTimeChanged ||
-              booking.ssrDenied) && (
+            {(hasPriceOrTimeNotice || ssrNoticeLeg) && (
               <motion.div
                 custom={3}
                 initial="hidden"
@@ -687,13 +656,11 @@ export default function BookingConfirmationPage() {
                 variants={fadeUp}
                 className="space-y-3"
               >
-                {(booking.isPriceChanged || booking.isTimeChanged) && (
+                {hasPriceOrTimeNotice && (
                   <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-2xl p-4">
                     <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
                     <div>
-                      <p className="font-semibold text-sm text-amber-800">
-                        Notice
-                      </p>
+                      <p className="font-semibold text-sm text-amber-800">Notice</p>
                       <p className="text-sm text-amber-700 mt-0.5">
                         {outboundLeg?.providerPriceChanged ||
                         inboundLeg?.providerPriceChanged
@@ -708,7 +675,7 @@ export default function BookingConfirmationPage() {
                   </div>
                 )}
 
-                {booking.ssrDenied && (
+                {ssrNoticeLeg && (
                   <div className="flex items-start gap-3 bg-orange-50 border border-orange-200 rounded-2xl p-4">
                     <Info className="w-5 h-5 text-orange-500 shrink-0 mt-0.5" />
                     <div>
@@ -716,7 +683,7 @@ export default function BookingConfirmationPage() {
                         SSR Notice
                       </p>
                       <p className="text-sm text-orange-700 mt-0.5">
-                        {booking.ssrMessage ||
+                        {ssrNoticeLeg?.providerSsrMessage ||
                           "Some ancillary requests (seat/meal/baggage) could not be confirmed by the airline."}
                       </p>
                     </div>
@@ -726,9 +693,7 @@ export default function BookingConfirmationPage() {
             )}
           </div>
 
-          {/* RIGHT COLUMN */}
           <div className="xl:col-span-4 space-y-6 xl:sticky xl:top-24 self-start">
-            {/* PNR & Booking Details */}
             <motion.div
               custom={4}
               initial="hidden"
@@ -745,10 +710,10 @@ export default function BookingConfirmationPage() {
                         </p>
                         <div className="flex items-center flex-wrap">
                           <span className="font-display text-2xl font-bold tracking-[0.16em] break-all">
-                            {booking.pnr}
+                            {displayPnr}
                           </span>
-                          {booking.pnr !== "PENDING" ? (
-                            <CopyButton text={booking.pnr} />
+                          {displayPnr !== "PENDING" ? (
+                            <CopyButton text={displayPnr} />
                           ) : (
                             <span className="ml-2 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-400/20 text-amber-200">
                               Processing
@@ -775,17 +740,17 @@ export default function BookingConfirmationPage() {
                       </div>
                     </div>
 
-                    {booking.pnrInbound && (
+                    {displayInboundPnr && (
                       <div className="text-white">
                         <p className="text-[10px] uppercase tracking-widest text-blue-200">
                           Return PNR
                         </p>
                         <div className="flex items-center flex-wrap">
                           <span className="font-display text-2xl font-bold tracking-[0.16em] break-all">
-                            {booking.pnrInbound}
+                            {displayInboundPnr}
                           </span>
-                          {booking.pnrInbound !== "PENDING" ? (
-                            <CopyButton text={booking.pnrInbound} />
+                          {displayInboundPnr !== "PENDING" ? (
+                            <CopyButton text={displayInboundPnr} />
                           ) : (
                             <span className="ml-2 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-400/20 text-amber-200">
                               Processing
@@ -799,21 +764,23 @@ export default function BookingConfirmationPage() {
 
                 <div className="p-6 space-y-6">
                   <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-1 gap-3">
-                    <DetailCell label="Booking ID" value={booking.bookingId} />
+                    <DetailCell label="Booking ID" value={displayBookingId} />
 
-                    {booking.bookingIdInbound && (
+                    {displayInboundBookingId && (
                       <DetailCell
                         label="Return Booking ID"
-                        value={booking.bookingIdInbound}
+                        value={displayInboundBookingId}
                       />
                     )}
 
                     {displayInvoiceAmount != null && (
                       <DetailCell
                         label="Invoice Amount"
-                        value={`₹${currencyFmt(booking.invoiceAmount)}`}
+                        value={`₹${currencyFmt(displayInvoiceAmount)}`}
                       />
                     )}
+
+                    
                   </div>
 
                   {(isConfirmed || isPartial) && (
@@ -844,41 +811,42 @@ export default function BookingConfirmationPage() {
                           </button>
                         )}
 
-    {booking.bookingIdInbound &&
-      booking.pnrInbound &&
-      booking.pnrInbound !== "PENDING" && (
-        <button
-          onClick={() =>
-            handleDownloadEticket({
-              bookingId: booking.bookingIdInbound,
-              pnr: booking.pnrInbound,
-              fileLabel: "Return_ETicket",
-            })
-          }
-          disabled={downloading}
-          type="button"
-          className="inline-flex items-center justify-center gap-2 px-5 py-3 bg-gradient-to-r from-[#0047FF] to-[#0066FF] text-white rounded-xl text-sm font-semibold hover:shadow-lg hover:shadow-[#0047FF]/20 transition-all active:scale-[0.97] disabled:opacity-60"
-        >
-          <Download className="w-4 h-4" />
-          {downloading ? "Downloading..." : "Download Return E-Ticket"}
-        </button>
-      )}
+                      {displayInboundBookingId &&
+                        displayInboundPnr &&
+                        displayInboundPnr !== "PENDING" && (
+                          <button
+                            onClick={() =>
+                              handleDownloadEticket({
+                                bookingId: displayInboundBookingId,
+                                pnr: displayInboundPnr,
+                                fileLabel: "Return_ETicket",
+                              })
+                            }
+                            disabled={downloading}
+                            type="button"
+                            className="inline-flex items-center justify-center gap-2 px-5 py-3 bg-gradient-to-r from-[#0047FF] to-[#0066FF] text-white rounded-xl text-sm font-semibold hover:shadow-lg hover:shadow-[#0047FF]/20 transition-all active:scale-[0.97] disabled:opacity-60"
+                          >
+                            <Download className="w-4 h-4" />
+                            {downloading
+                              ? "Downloading..."
+                              : "Download Return E-Ticket"}
+                          </button>
+                        )}
 
-    <button
-      onClick={() => window.print()}
-      type="button"
-      className="inline-flex items-center justify-center gap-2 px-5 py-3 border border-gray-200 text-gray-700 rounded-xl text-sm font-semibold hover:bg-gray-50 transition-all active:scale-[0.97]"
-    >
-      <Printer className="w-4 h-4" />
-      Print
-    </button>
-  </div>
-)}
+                      <button
+                        onClick={() => window.print()}
+                        type="button"
+                        className="inline-flex items-center justify-center gap-2 px-5 py-3 border border-gray-200 text-gray-700 rounded-xl text-sm font-semibold hover:bg-gray-50 transition-all active:scale-[0.97]"
+                      >
+                        <Printer className="w-4 h-4" />
+                        Print
+                      </button>
+                    </div>
+                  )}
                 </div>
               </Card>
             </motion.div>
 
-            {/* Fare Breakdown */}
             {fareBreakdown && (
               <motion.div
                 custom={5}
@@ -943,9 +911,7 @@ export default function BookingConfirmationPage() {
                     )}
 
                     <div className="border-t border-dashed border-gray-200 pt-4 flex justify-between items-center">
-                      <span className="font-bold text-gray-900">
-                        Total Paid
-                      </span>
+                      <span className="font-bold text-gray-900">Total Paid</span>
                       <span className="font-display text-2xl font-extrabold bg-gradient-to-r from-[#FF2E57] to-[#FF6B35] bg-clip-text text-transparent">
                         ₹{currencyFmt(fareBreakdown.totalFare)}
                       </span>
@@ -955,7 +921,6 @@ export default function BookingConfirmationPage() {
               </motion.div>
             )}
 
-            {/* Policy */}
             {miniFareRules.length > 0 && (
               <motion.div
                 custom={6}
@@ -999,7 +964,6 @@ export default function BookingConfirmationPage() {
               </motion.div>
             )}
 
-            {/* Go Home */}
             <motion.div
               custom={7}
               initial="hidden"
