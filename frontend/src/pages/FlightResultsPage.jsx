@@ -9,54 +9,7 @@ import FlightPriceCard from "../components/search/FlightPriceCard";
 import Offers from "../components/search/Offers";
 import LoaderOverlay from "../components/common/LoaderOverlay";
 import FareModal from "../components/search/FareModal";
-
-const getDepartureHour = (flight) => {
-  const depTime =
-    flight?.departureTime ||
-    flight?.fares?.[0]?.segments?.[0]?.[0]?.departureTime ||
-    flight?.Segments?.[0]?.[0]?.Origin?.DepTime ||
-    flight?.Segments?.[0]?.[0]?.departureTime;
-
-  if (!depTime) return null;
-
-  const date = new Date(depTime);
-  if (Number.isNaN(date.getTime())) return null;
-
-  return date.getHours();
-};
-
-const getStopsCount = (flight) => {
-  if (typeof flight?.noOfStops === "number") return flight.noOfStops;
-
-  const fareSegments = flight?.fares?.[0]?.segments?.[0];
-  if (Array.isArray(fareSegments)) {
-    return Math.max(fareSegments.length - 1, 0);
-  }
-
-  const segmentGroup = flight?.Segments?.[0] || [];
-  return Math.max(segmentGroup.length - 1, 0);
-};
-
-const getAirlineName = (flight) => {
-  return (
-    flight?.fares?.[0]?.segments?.[0]?.[0]?.carrier?.name ||
-    flight?.Segments?.[0]?.[0]?.Airline?.AirlineName ||
-    ""
-  );
-};
-
-const matchesTimeSlot = (hour, activeSlots) => {
-  if (!activeSlots.length) return true;
-  if (hour === null) return false;
-
-  return activeSlots.some((slot) => {
-    if (slot === "earlyMorning") return hour >= 0 && hour < 8;
-    if (slot === "morning") return hour >= 8 && hour < 12;
-    if (slot === "afternoon") return hour >= 12 && hour < 18;
-    if (slot === "evening") return hour >= 18 && hour < 24;
-    return false;
-  });
-};
+import { filterFlights } from "../utils/flightFilters";
 
 export default function FlightResultsPage() {
   const {
@@ -67,12 +20,7 @@ export default function FlightResultsPage() {
     children,
     infants,
     isLoading,
-    filters = {
-      nonStop: false,
-      oneStop: false,
-      timeSlots: {},
-      airlines: [],
-    },
+    filters = {},
     setCache,
   } = useFlightStore();
 
@@ -86,34 +34,10 @@ export default function FlightResultsPage() {
     }
   };
 
-  const filteredFlights = useMemo(() => {
-    const selectedAirlines = filters?.airlines || [];
-    const activeTimeSlots = Object.keys(filters?.timeSlots || {}).filter(
-      (key) => filters.timeSlots[key]
-    );
-
-    return outboundFlights.filter((flight) => {
-      const stops = getStopsCount(flight);
-      const airlineName = getAirlineName(flight);
-      const depHour = getDepartureHour(flight);
-
-      if (filters?.nonStop && stops !== 0) return false;
-      if (filters?.oneStop && stops !== 1) return false;
-
-      if (
-        selectedAirlines.length > 0 &&
-        !selectedAirlines.includes(airlineName)
-      ) {
-        return false;
-      }
-
-      if (!matchesTimeSlot(depHour, activeTimeSlots)) {
-        return false;
-      }
-
-      return true;
-    });
-  }, [outboundFlights, filters]);
+  const filteredFlights = useMemo(
+    () => filterFlights(outboundFlights, filters.outbound, filters.maxPrice),
+    [outboundFlights, filters]
+  );
 
   if (isLoading) return <LoaderOverlay />;
 

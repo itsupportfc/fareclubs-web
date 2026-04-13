@@ -96,6 +96,7 @@ class LegExecutionResult:
 
 
 class BookingCheckoutService:
+    # injects all the dependencies, makes it testable
     def __init__(
         self,
         *,
@@ -126,7 +127,7 @@ class BookingCheckoutService:
             payload.fare_id_outbound,
             payload.fare_id_inbound,
         )
-
+        # check cache => validate payment amount => return Razorpay order details 
         await self._require_cached_fare(payload.fare_id_outbound)
         verified_total_amount = await self._compute_verified_total_amount(
             fare_id_outbound=payload.fare_id_outbound,
@@ -173,7 +174,7 @@ class BookingCheckoutService:
             payload.fare_id_outbound,
             payload.fare_id_inbound,
         )
-
+        # why confirming the amount again?
         outbound_cached_fare = await self._require_cached_fare(payload.fare_id_outbound)
         verified_total_amount = await self._compute_verified_total_amount(
             fare_id_outbound=payload.fare_id_outbound,
@@ -277,12 +278,15 @@ class BookingCheckoutService:
     async def _build_leg_work_items(
         self,
         payload: BookingConfirmRequest,
-        outbound_cached_fare: dict,
+        outbound_cached_fare: dict, # why only this is required? 
     ) -> list[LegWorkItem]:
+        # outbound_cached_fare == provider_ref dict of this fare_id
         outbound_is_lcc = outbound_cached_fare.get("IsLCC", False)
         outbound_raw_ssr = await self.cache.get_model(
             f"raw_ssr_{payload.fare_id_outbound}", TBOSSRResponse
-        )
+        ) 
+        # checking that SSR options exist in cache?
+        # why only for lcc? 
         if outbound_is_lcc and not outbound_raw_ssr:
             raise HTTPException(
                 status_code=status.HTTP_410_GONE,
@@ -740,6 +744,7 @@ class BookingCheckoutService:
         fare_id_outbound: str,
         fare_id_inbound: str | None,
     ) -> float:
+        # we set this during FareQuote response processing
         verified_outbound_amount = await self.cache.get(
             f"verified_price_{fare_id_outbound}"
         )
