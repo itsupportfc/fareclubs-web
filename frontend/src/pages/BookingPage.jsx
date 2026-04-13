@@ -564,7 +564,7 @@ export default function BookingPage() {
                     );
                 } catch {}
                 navigate("/booking/confirmation", {
-                    state: { booking, outboundFlight },
+                    state: { booking, outboundFlight,inboundFlight, },
                 });
             },
             (err) => handleBookingError(err),
