@@ -132,91 +132,220 @@ export default function BookingPage() {
     };
 
     /* --- Validation --- */
-    const travellersComplete = useMemo(() => {
-        if (!travellers.length) return false;
-        const basicOk = travellers.every(
-            (t) =>
-                t.title &&
-                t.firstName &&
-                t.lastName &&
-                t.dateOfBirth &&
-                t.gender,
-        );
-        const leadOk = !!(travellers[0]?.email && travellers[0]?.contactNo);
-        const panOk =
-            !fareQuoteFlags?.isPanRequired || travellers.every((t) => t.pan);
-        const passportOk =
-            !fareQuoteFlags?.isPassportRequired ||
-            travellers.every(
-                (t) =>
-                    t.passportNo &&
-                    t.passportExpiry &&
-                    (!fareQuoteFlags?.isPassportFullDetailRequired ||
-                        (t.passportIssueDate && t.passportIssueCountryCode)),
-            );
-        return basicOk && leadOk && panOk && passportOk;
-    }, [travellers, fareQuoteFlags]);
+   const calculateAge = (dateOfBirth) => {
+    if (!dateOfBirth) return null;
 
-    /* --- Init travellers --- */
-    useEffect(() => {
-        if (!passengers) return;
-        const list = [];
-        const extraFields = {
-            pan: "",
-            passportNo: "",
-            passportExpiry: "",
-            passportIssueDate: "",
-            passportIssueCountryCode: "",
+    const today = new Date();
+    const dob = new Date(dateOfBirth);
+
+    if (Number.isNaN(dob.getTime())) return null;
+
+    let age = today.getFullYear() - dob.getFullYear();
+    const monthDiff = today.getMonth() - dob.getMonth();
+    const dayDiff = today.getDate() - dob.getDate();
+
+    if (monthDiff < 0 || (monthDiff === 0 && dayDiff < 0)) {
+        age--;
+    }
+
+    return age;
+};
+
+const travellersValidation = useMemo(() => {
+    const errors = [];
+
+    if (!travellers.length) {
+        return {
+            isValid: false,
+            errors: [],
         };
-        for (let i = 0; i < passengers.adults; i++)
-            list.push({
-                title: "",
-                firstName: "",
-                lastName: "",
-                dateOfBirth: "",
-                gender: "",
-                type: "Adult",
-                email: "",
-                contactNo: "",
-                addressLine1: "",
-                city: "",
-                nationality: "IN",
-                ...extraFields,
-                ...(i === 0
-                    ? {
-                          gstCompanyName: "",
-                          gstNumber: "",
-                          gstCompanyAddress: "",
-                          gstCompanyEmail: "",
-                          gstCompanyPhone: "",
-                      }
-                    : {}),
-            });
-        for (let i = 0; i < passengers.children; i++)
-            list.push({
-                title: "",
-                firstName: "",
-                lastName: "",
-                dateOfBirth: "",
-                gender: "",
-                type: "Child",
-                nationality: "IN",
-                ...extraFields,
-            });
-        for (let i = 0; i < passengers.infants; i++)
-            list.push({
-                title: "",
-                firstName: "",
-                lastName: "",
-                dateOfBirth: "",
-                gender: "",
-                type: "Infant",
-                nationality: "IN",
-                ...extraFields,
-            });
-        setTravellers(list);
-    }, [passengers]);
+    }
 
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    travellers.forEach((t, index) => {
+        const travellerErrors = {};
+
+        // Basic required fields
+        if (!t.title) travellerErrors.title = "Title is required";
+        if (!t.firstName?.trim())
+            travellerErrors.firstName = "First name is required";
+        if (!t.lastName?.trim())
+            travellerErrors.lastName = "Last name is required";
+        if (!t.gender) travellerErrors.gender = "Gender is required";
+
+        // DOB validation
+        if (!t.dateOfBirth) {
+            travellerErrors.dateOfBirth = "Date of birth is required";
+        } else {
+            const dob = new Date(t.dateOfBirth);
+
+            if (Number.isNaN(dob.getTime())) {
+                travellerErrors.dateOfBirth = "Invalid date of birth";
+            } else {
+                dob.setHours(0, 0, 0, 0);
+
+                if (dob > today) {
+                    travellerErrors.dateOfBirth =
+                        "Date of birth cannot be in the future";
+                } else {
+                    const age = calculateAge(t.dateOfBirth);
+
+                    if (t.type === "Adult" && age < 12) {
+                        travellerErrors.dateOfBirth =
+                            "Adult must be at least 12 years old";
+                    }
+
+                    if (t.type === "Infant" && age >= 2) {
+                        travellerErrors.dateOfBirth =
+                            "Infant cannot be more than 2 years old";
+                    }
+                }
+            }
+        }
+
+        // Lead traveller validation
+        if (index === 0) {
+            if (!t.email?.trim()) {
+                travellerErrors.email = "Email is required";
+            } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(t.email)) {
+                travellerErrors.email = "Invalid email address";
+            }
+
+            if (!t.contactNo?.trim()) {
+                travellerErrors.contactNo = "Contact number is required";
+            } else if (!/^\d{10}$/.test(t.contactNo)) {
+                travellerErrors.contactNo =
+                    "Contact number must be 10 digits";
+            }
+        }
+
+        // PAN validation
+        if (fareQuoteFlags?.isPanRequired) {
+            if (!t.pan?.trim()) {
+                travellerErrors.pan = "PAN is required";
+            }
+        }
+
+        // Passport validation
+        if (fareQuoteFlags?.isPassportRequired) {
+            if (!t.passportNo?.trim()) {
+                travellerErrors.passportNo = "Passport number is required";
+            }
+
+            if (!t.passportExpiry) {
+                travellerErrors.passportExpiry =
+                    "Passport expiry is required";
+            } else {
+                const expiry = new Date(t.passportExpiry);
+
+                if (Number.isNaN(expiry.getTime())) {
+                    travellerErrors.passportExpiry =
+                        "Invalid passport expiry date";
+                } else {
+                    expiry.setHours(0, 0, 0, 0);
+                    if (expiry <= today) {
+                        travellerErrors.passportExpiry =
+                            "Passport expiry must be a future date";
+                    }
+                }
+            }
+
+            if (fareQuoteFlags?.isPassportFullDetailRequired) {
+                if (!t.passportIssueDate) {
+                    travellerErrors.passportIssueDate =
+                        "Passport issue date is required";
+                }
+                if (!t.passportIssueCountryCode?.trim()) {
+                    travellerErrors.passportIssueCountryCode =
+                        "Passport issue country is required";
+                }
+            }
+        }
+
+        errors[index] = travellerErrors;
+    });
+
+    const isValid = errors.every(
+        (travellerErrors) => Object.keys(travellerErrors || {}).length === 0,
+    );
+
+    return {
+        isValid,
+        errors,
+    };
+}, [travellers, fareQuoteFlags]);
+
+const travellersComplete = travellersValidation.isValid;
+
+/* --- Init travellers --- */
+useEffect(() => {
+    if (!passengers) return;
+
+    const list = [];
+    const extraFields = {
+        pan: "",
+        passportNo: "",
+        passportExpiry: "",
+        passportIssueDate: "",
+        passportIssueCountryCode: "",
+    };
+
+    for (let i = 0; i < passengers.adults; i++) {
+        list.push({
+            title: "",
+            firstName: "",
+            lastName: "",
+            dateOfBirth: "",
+            gender: "",
+            type: "Adult",
+            email: "",
+            contactNo: "",
+            addressLine1: "",
+            city: "",
+            nationality: "IN",
+            ...extraFields,
+            ...(i === 0
+                ? {
+                      gstCompanyName: "",
+                      gstNumber: "",
+                      gstCompanyAddress: "",
+                      gstCompanyEmail: "",
+                      gstCompanyPhone: "",
+                  }
+                : {}),
+        });
+    }
+
+    for (let i = 0; i < passengers.children; i++) {
+        list.push({
+            title: "",
+            firstName: "",
+            lastName: "",
+            dateOfBirth: "",
+            gender: "",
+            type: "Child",
+            nationality: "IN",
+            ...extraFields,
+        });
+    }
+
+    for (let i = 0; i < passengers.infants; i++) {
+        list.push({
+            title: "",
+            firstName: "",
+            lastName: "",
+            dateOfBirth: "",
+            gender: "",
+            type: "Infant",
+            nationality: "IN",
+            ...extraFields,
+        });
+    }
+
+    setTravellers(list);
+}, [passengers]);
     /* --- SSR prefetch on mount --- */
     useEffect(() => {
         if (!outboundSelectedFare?.fareId) return;
@@ -379,7 +508,8 @@ export default function BookingPage() {
             (err) => setBookingError(err),
         );
     };
-
+console.log("travellers", travellers);
+console.log("travellersValidation", travellersValidation);
     return (
         <div className="min-h-screen bg-gray-50">
             <BookingProcessingOverlay
@@ -461,6 +591,8 @@ export default function BookingPage() {
                             travellers={travellers}
                             setTravellers={setTravellers}
                             fareQuoteFlags={fareQuoteFlags}
+                            travellersValidation={travellersValidation}
+                            isDomestic={true}
                         />
                     </motion.div>
 
@@ -662,7 +794,7 @@ export default function BookingPage() {
                 </div>
 
                 {/* RIGHT COLUMN (1/3) — Fare Summary */}
-                <div className="hidden lg:block">
+                <div className="hidden  lg:block">
                     <FareSummary
                         outboundFare={outboundSelectedFare}
                         returnFare={returnSelectedFare}
@@ -676,7 +808,7 @@ export default function BookingPage() {
                 </div>
 
                 {/* Mobile fare summary (fixed bottom bar) */}
-                <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-gray-200 px-4 py-3 flex items-center justify-between shadow-[0_-4px_12px_rgba(0,0,0,0.08)]">
+                <div className="lg:hidden fixed bottom-0 left-0 right-0  z-40 bg-white border-t border-gray-200 px-4 py-3 flex items-center justify-between shadow-[0_-4px_12px_rgba(0,0,0,0.08)]">
                     <div>
                         <p className="text-xs text-gray-500">Total Fare</p>
                         <p className="font-display text-lg font-extrabold bg-gradient-to-r from-[#FF2E57] to-[#FF6B35] bg-clip-text text-transparent">

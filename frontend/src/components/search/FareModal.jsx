@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { X, Star, Plane } from "lucide-react";
+import { X, Star, Plane, Luggage, UtensilsCrossed } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { getFareQuoteAPI } from "../api/flight";
@@ -11,16 +11,17 @@ export default function FareModal({
   passengers = { adults: 1, children: 0, infants: 0 },
   onClose,
 }) {
-  if (!flight) return null;
-
   const navigate = useNavigate();
   const [loadingFareId, setLoadingFareId] = useState(null);
   const [priceChange, setPriceChange] = useState(null);
   const [timeChanged, setTimeChanged] = useState(null);
 
+  if (!flight) return null;
+
   const actualFlight = flight.flight || flight;
   const fares = actualFlight?.fares || flight?.fares || [];
   if (!fares.length) return null;
+
 
   const segments =
     flight.segments ||
@@ -123,6 +124,7 @@ export default function FareModal({
   return (
     <div className="fixed inset-0 z-50 bg-black/60 flex justify-center items-center">
       <FareQuoteOverlay isVisible={!!loadingFareId} />
+
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
@@ -178,7 +180,7 @@ export default function FareModal({
           </div>
         </div>
 
-        {/* Price change inline banner */}
+        {/* PRICE CHANGE BANNER */}
         {priceChange && (
           <div className="mx-6 mt-4 bg-amber-50 border border-amber-300 rounded-xl p-4">
             <p className="text-sm font-semibold text-amber-800 mb-2">
@@ -198,7 +200,7 @@ export default function FareModal({
                   navigateToBooking(
                     priceChange.fare,
                     priceChange.quoteResponse,
-                    priceChange.newPrice,
+                    priceChange.newPrice
                   );
                 }}
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition-colors duration-200"
@@ -218,7 +220,7 @@ export default function FareModal({
           </div>
         )}
 
-        {/* Time change inline banner */}
+        {/* TIME CHANGE BANNER */}
         {timeChanged && (
           <div className="mx-6 mt-4 bg-amber-50 border border-amber-300 rounded-xl p-4">
             <p className="text-sm font-semibold text-amber-800 mb-2">
@@ -233,7 +235,7 @@ export default function FareModal({
                   navigateToBooking(
                     timeChanged.fare,
                     timeChanged.quoteResponse,
-                    timeChanged.newPrice,
+                    timeChanged.newPrice
                   );
                 }}
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition-colors duration-200"
@@ -258,6 +260,7 @@ export default function FareModal({
           <div className="flex gap-6 min-w-max">
             {fares.map((fare, idx) => {
               const fareId = fare?.fareId || fare?.FareId;
+              const firstLeg = fare?.segments?.[0]?.[0];
 
               return (
                 <motion.div
@@ -272,7 +275,7 @@ export default function FareModal({
                   }`}
                 >
                   {fare.isRecommended && (
-                    <div className="absolute -top-3 left-4 bg-blue-600 text-white text-xs px-3 py-1 rounded-full flex gap-1">
+                    <div className="absolute -top-3 left-4 bg-blue-600 text-white text-xs px-3 py-1 rounded-full flex gap-1 items-center">
                       <Star className="w-3 h-3 fill-white" />
                       Recommended
                     </div>
@@ -286,12 +289,45 @@ export default function FareModal({
                     {fare.fareType}
                   </p>
 
+                  {/* FEATURES */}
+                  <div className="mt-4 space-y-3 text-sm text-gray-600">
+                    <div className="flex items-center gap-2">
+                      <Luggage className="w-4 h-4 text-gray-500" />
+                      <span>
+                        Cabin:{" "}
+                        <span className="font-medium">
+                          {firstLeg?.cabinBaggage || "7 KG"}
+                        </span>
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <Luggage className="w-4 h-4 text-gray-500" />
+                      <span>
+                        Check-in:{" "}
+                        <span className="font-medium">
+                          {firstLeg?.checkedBaggage || "15 KG"}
+                        </span>
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <UtensilsCrossed className="w-4 h-4 text-gray-500" />
+                      <span>
+                        Meals:{" "}
+                        <span className="font-medium">
+                          {fare?.mealIncluded ? "Included" : "Not Included"}
+                        </span>
+                      </span>
+                    </div>
+                  </div>
+
                   <div className="my-4 border-t" />
 
                   <button
                     disabled={!!loadingFareId}
                     onClick={() => handleBookNow(fare)}
-                    className="mt-6 bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-xl font-semibold disabled:opacity-60 transition-colors duration-200"
+                    className="mt-2 bg-pink-600 hover:bg-blue-700 text-white py-2.5 rounded-xl font-semibold disabled:opacity-60 transition-colors duration-200"
                   >
                     {loadingFareId === fareId
                       ? "CHECKING PRICE..."

@@ -1,6 +1,5 @@
-import React, { useState, useMemo, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-import { motion, AnimatePresence } from "framer-motion";
+import React, { useState, useMemo } from "react";
+import { motion } from "framer-motion";
 import useFlightStore from "../store/useFlightStore";
 import Navbar from "../components/Home/Navbar";
 import SmallSearch from "../components/search/SmallSearch";
@@ -15,6 +14,10 @@ const getLowestFare = (flight) =>
     flight?.fares?.[0];
 
 const getLegs = (flight) => getLowestFare(flight)?.segments?.[0] || [];
+
+const getPrimaryLegs = (flight) => getLowestFare(flight)?.segments?.[0] || [];
+
+const getPrimarySegment = (flight) => getPrimaryLegs(flight)?.[0];
 
 const formatTime = (t) =>
     new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -34,9 +37,59 @@ const getFlightBaggage = (flight) => {
 // For domestic flights, segments[1] doesn't exist → returns [].
 const getReturnLegs = (flight) => getLowestFare(flight)?.segments?.[1] || [];
 
+const matchesTimeSlot = (hour, timeSlots = {}) => {
+    const slots = timeSlots || {};
+
+    const hasActive =
+        !!slots.earlyMorning ||
+        !!slots.morning ||
+        !!slots.afternoon ||
+        !!slots.evening;
+
+    if (!hasActive) return true;
+
+    return (
+        (slots.earlyMorning && hour >= 0 && hour < 8) ||
+        (slots.morning && hour >= 8 && hour < 12) ||
+        (slots.afternoon && hour >= 12 && hour < 18) ||
+        (slots.evening && hour >= 18 && hour < 24)
+    );
+};
+
+const matchesFlightFilters = (flight, filters = {}) => {
+    const first = getPrimarySegment(flight);
+    if (!first) return true;
+
+    const noOfStops =
+        typeof flight.noOfStops === "number"
+            ? flight.noOfStops
+            : Math.max(getPrimaryLegs(flight).length - 1, 0);
+
+    // Stop filters
+    const stopFilterActive = !!filters.nonStop || !!filters.oneStop;
+    if (stopFilterActive) {
+        const matchesStop =
+            (filters.nonStop && noOfStops === 0) ||
+            (filters.oneStop && noOfStops === 1);
+
+        if (!matchesStop) return false;
+    }
+
+    // Airline filters
+    if (filters.airlines?.length) {
+        const airlineName = first?.carrier?.name;
+        if (!filters.airlines.includes(airlineName)) return false;
+    }
+
+    // Time slot filters
+    const departureHour = new Date(first.departureTime).getHours();
+    if (!matchesTimeSlot(departureHour, filters.timeSlots)) return false;
+
+    return true;
+};
+
 /* ================= PAGE ================= */
 export default function ReturnResultsPage() {
-    const navigate = useNavigate();
     const flightStore = useFlightStore();
 
     const {
@@ -49,11 +102,11 @@ export default function ReturnResultsPage() {
         isInternationalReturn,
         getSelectedFlight,
         setSelectedFlight,
+        filters = {},
     } = flightStore;
 
     const farePassengers = adults + children;
 
-    // Resolve trip config — drives ALL conditional rendering and pricing below.
     const tripConfig = useTripConfig({
         tripType: "roundtrip",
         isInternationalReturn,
@@ -80,18 +133,24 @@ export default function ReturnResultsPage() {
     };
 
     // International return: one flight = both directions.
-    // Set both outbound AND inbound to the same flight object.
     const handleInternationalSelect = (flight) => {
         setSelectedOutboundState(flight);
         setSelectedInboundState(flight);
         setSelectedFlight({ outbound: flight, inbound: flight });
     };
 
-    // PRICING FIX: lowestPrice/totalPrice from TBO's PublishedFare is already the
-    // total for ALL passengers. Do NOT multiply by farePassengers.
-    // tripConfig.getDisplayPrice handles the variant logic:
-    //   domestic: outPrice + inPrice (two separate fares)
-    //   international: outPrice only (one clubbed fare is the full roundtrip price)
+    const filteredOutboundFlights = useMemo(() => {
+        return outboundFlights.filter((flight) =>
+            matchesFlightFilters(flight, filters),
+        );
+    }, [outboundFlights, filters]);
+
+    const filteredInboundFlights = useMemo(() => {
+        return inboundFlights.filter((flight) =>
+            matchesFlightFilters(flight, filters),
+        );
+    }, [inboundFlights, filters]);
+
     const totalPrice = useMemo(() => {
         return tripConfig.getDisplayPrice(selectedOutbound, selectedInbound);
     }, [selectedOutbound, selectedInbound, tripConfig]);
@@ -102,7 +161,6 @@ export default function ReturnResultsPage() {
         <div className="min-h-screen bg-gray-50 mt-16 pb-40">
             <Navbar />
 
-            {/* Header */}
             <div className="bg-gradient-to-r from-[#FF2E57] to-[#0047FF] text-white">
                 <div className="max-w-7xl mx-auto px-4 py-5">
                     <SmallSearch />
@@ -112,7 +170,6 @@ export default function ReturnResultsPage() {
                 </div>
             </div>
 
-            {/* Content */}
             <div className="max-w-7xl mx-auto px-4 py-10 flex gap-6">
                 <div className="hidden md:block w-72">
                     <Sidebar
@@ -121,21 +178,18 @@ export default function ReturnResultsPage() {
                     />
                 </div>
 
-                {/* CONDITIONAL LAYOUT:
-                  Domestic → two columns (pick one per direction)
-                  International → single column with clubbed cards */}
                 {tripConfig.hasSeparateLists ? (
                     <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-6">
                         <FlightColumn
                             title="Departure"
-                            flights={outboundFlights}
+                            flights={filteredOutboundFlights}
                             selected={selectedOutbound}
                             onSelect={setSelectedOutbound}
                             onDetails={setDetailsFlight}
                         />
                         <FlightColumn
                             title="Return"
-                            flights={inboundFlights}
+                            flights={filteredInboundFlights}
                             selected={selectedInbound}
                             onSelect={setSelectedInbound}
                             onDetails={setDetailsFlight}
@@ -156,7 +210,7 @@ export default function ReturnResultsPage() {
                                 },
                             }}
                         >
-                            {outboundFlights.map((f) => (
+                            {filteredOutboundFlights.map((f) => (
                                 <InternationalFlightCard
                                     key={f.groupId}
                                     flight={f}
@@ -172,7 +226,6 @@ export default function ReturnResultsPage() {
                 )}
             </div>
 
-            {/* ================= STICKY FOOTER ================= */}
             {(selectedOutbound || selectedInbound) && (
                 <div className="fixed bottom-0 left-0 right-0 z-50 bg-[#0B1D33] text-white px-6 py-4">
                     <div className="max-w-7xl mx-auto flex justify-between items-center">
@@ -244,7 +297,6 @@ export default function ReturnResultsPage() {
                 </div>
             )}
 
-            {/* ================= DETAILS MODAL ================= */}
             {detailsFlight && (
                 <FlightDetailsModal
                     flight={detailsFlight}
@@ -254,7 +306,6 @@ export default function ReturnResultsPage() {
                 />
             )}
 
-            {/* ================= FARE MODAL ================= */}
             {showFareModal && (
                 <ReturnFareModal
                     outboundFlight={selectedOutbound}
@@ -339,8 +390,6 @@ function FlightCard({ flight, isSelected, onSelect, onShowDetails }) {
                     </div>
                 </div>
 
-                {/* PRICING FIX: lowestPrice is already total for all passengers.
-            Old code multiplied by farePassengers — that was WRONG. */}
                 <div className="font-display font-bold text-lg">
                     ₹{flight.lowestPrice.toLocaleString("en-IN")}
                 </div>
@@ -361,11 +410,10 @@ function FlightCard({ flight, isSelected, onSelect, onShowDetails }) {
 
 /* ================= FOOTER FLIGHT ================= */
 function FooterFlight({ title, flight, legs: legsOverride, onShowDetails }) {
-    // Use explicit legs if provided (international), else extract from flight (domestic).
     const legs = legsOverride || getLegs(flight);
     const first = legs[0];
     const last = legs[legs.length - 1];
-    if (!first) return null; // Guard against empty legs
+    if (!first) return null;
 
     return (
         <div className="flex items-center gap-4">
@@ -396,7 +444,6 @@ function FooterFlight({ title, flight, legs: legsOverride, onShowDetails }) {
 function FlightDetailsModal({ flight, tab, setTab, onClose }) {
     const fare = getLowestFare(flight);
     const legs = getLegs(flight);
-    // International return: segments[1] = inbound legs. Domestic: returns [].
     const returnLegs = getReturnLegs(flight);
     const hasReturn = returnLegs.length > 0;
 
@@ -456,7 +503,6 @@ function FlightDetailsModal({ flight, tab, setTab, onClose }) {
                 <div className="p-4 max-h-96 overflow-y-auto">
                     {tab === "itinerary" && (
                         <>
-                            {/* For international return, show "Departure" / "Return" section headers */}
                             {hasReturn && (
                                 <p className="text-xs font-semibold text-gray-400 uppercase mb-2">
                                     Departure
@@ -530,8 +576,6 @@ function FlightDetailsModal({ flight, tab, setTab, onClose }) {
                         </>
                     )}
 
-                    {/* PRICING FIX: baseFare, taxes, totalPrice are already totals for all pax.
-              Old code multiplied by farePassengers — removed. */}
                     {tab === "fare" && (
                         <>
                             <p>
@@ -565,13 +609,15 @@ function InternationalFlightCard({
     onSelect,
     onShowDetails,
 }) {
-    const outLegs = getLegs(flight); // segments[0] — outbound
-    const inLegs = getReturnLegs(flight); // segments[1] — inbound (empty for domestic)
-    const outFirst = outLegs[0],
-        outLast = outLegs.at(-1);
-    const inFirst = inLegs[0],
-        inLast = inLegs.at(-1);
-    if (!outFirst || !outLast) return null; // Guard against malformed data
+    const outLegs = getLegs(flight);
+    const inLegs = getReturnLegs(flight);
+    const outFirst = outLegs[0];
+    const outLast = outLegs.at(-1);
+    const inFirst = inLegs[0];
+    const inLast = inLegs.at(-1);
+
+    if (!outFirst || !outLast) return null;
+    if (!inFirst || !inLast) return null;
 
     const outStops = outLegs.length - 1;
     const inStops = inLegs.length - 1;
@@ -636,7 +682,6 @@ function InternationalFlightCard({
                     </div>
                 </div>
             </div>
-            {/* Price is lowestPrice directly — already roundtrip total for all pax */}
             <div className="flex justify-between items-center mt-3 pt-3 border-t border-gray-100">
                 <button
                     onClick={(e) => {

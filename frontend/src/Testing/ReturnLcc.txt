@@ -1,0 +1,1297 @@
+2026-03-23 14:25:23,769 uvicorn.access INFO 172.18.0.1:62824 - "POST /api/v1/flights/booking/create-order HTTP/1.1" 200
+2026-03-23 14:25:50,442 sqlalchemy.engine.Engine INFO BEGIN (implicit)
+2026-03-23 14:25:50,443 sqlalchemy.engine.Engine INFO INSERT INTO payments (user_id, razorpay_order_id, razorpay_payment_id, razorpay_signature, amount_paise, status, refund_id, refund_amount_paise) VALUES ($1::INTEGER, $2::VARCHAR, $3::VARCHAR, $4::VARCHAR, $5::INTEGER, $6::VARCHAR, $7::VARCHAR, $8::INTEGER) RETURNING payments.id, payments.currency, payments.created_at, payments.updated_at
+2026-03-23 14:25:50,443 sqlalchemy.engine.Engine INFO [cached since 1865s ago] (None, 'order_SUhPqFLoDcX4FQ', 'pay_SUhQ1RxoTqYh8K', '0b08cd4d30b565cc5014f82abb487f903653c1d39734f8131ffaa568d9d44bcb', 2324300, 'captured', None, None)
+2026-03-23 14:25:50,631 httpx INFO HTTP Request: POST http://sharedapi.tektravels.com/SharedData.svc/rest/Authenticate "HTTP/1.1 200 OK"
+2026-03-23 14:25:50,632 app.clients.tbo_client INFO TBO token cached successfully until midnight UTC
+2026-03-23 14:25:50,633 app.clients.tbo_client INFO → TBO /Ticket (LCC) called
+2026-03-23 14:25:50,633 app.clients.tbo_client INFO TBO TicketLCC request: {
+  "EndUserIp": "172.18.0.1",
+  "TraceId": "eb8999a8-6947-4a25-9f1e-842bbf263774",
+  "ResultIndex": "OB13[TBO]/1Wk5R6Ef7WG/AKO7UFa8atLFFCj+TVSo1w5oXm1M0o+dgPa1tZLPSDOw/w2o/jKGE4SwbXuQVnDUNJpFNu5pNMQN+DGYZhPMHCJS3z+URjRJX32M+RqVBCkakotYhtKsAw555YbM1t0WXtCGjg8BCeVqvpuGYwCrvGzhO7b9kDos/GaVd6lNHGOvOhvumhlM4v3Hwb3uUOnf+RukuegKrHGjyQG21h6eH9i1Ucn1qoWTqxVN+gIVzLS2hpPM79mdI0YWMryu7znbq+xUG6JxC8veZiLokWLTmcnOh+JzZh8v9wwZyqpi16MhG2FiYnooxvT1xDC9F3g8Q64X3GEguDbRZxO/zxTI86e5uYC3bVEXPEXu72UYxHSV8e+ywfKs1sFSBm5ZEV4UJflxmiUQYMA9pStHQGOy4bb2iD5GZMYCt9ls0+8jA5cZ0LdPhW/CWXhwlo4ePsNTX0/JbPLezjsv51uPSo8PSn11fRNrorcpgp6SY0p10BY+unDU02pMs3Po3kS2gw2G1NGbfnuh7JQe8oVZWa+uFt5fI6SQDdQxUoq3w1m0+4d4gWodpwRLFJ/soHcVsC+ogcBort8TSJ/cO3rCUeau7AT/n9xn1KAqPLNlcv5M31gAwuZYFbrtDNz7NG42kNL9ZuNpzk86uIvya1cr0MsLlCCpwm6YfuvRbJn9JlH3P0gPQmQY4Jn+rUQbHxxJmiqHiVVNMLdjv7+w3oKz0sAuZfCP/C/HfGPYRLKFnKChP5xFt7/MOWRtzrBL3K4A9IUcF/ltCB7KJ6ebwAaJveW5YAszT2ix6oBYUKLbJxRU3h4s1qKoVlx1xPp4ouOpESNZ562uVJ7dJbg0QBDjHQ893kGjK54g0rC5yyJKFochyVCCcMhNZQM",
+  "Passengers": [
+    {
+      "Title": "Mr",
+      "FirstName": "Nanu",
+      "LastName": "Rao",
+      "PaxType": 1,
+      "Gender": 1,
+      "DateOfBirth": "2002-10-09T00:00:00",
+      "AddressLine1": "Houseno.65,VPO Pithrawas, Rewari Haryana",
+      "City": "Rewari",
+      "CountryCode": "IN",
+      "CountryName": "India",
+      "ContactNo": "9896176383",
+      "Email": "nanurao051@gmail.com",
+      "IsLeadPax": true,
+      "Nationality": "IN",
+      "Fare": {
+        "BaseFare": 3100.0,
+        "Tax": 1094.0,
+        "YQTax": 425.0,
+        "AdditionalTxnFeeOfrd": 0.0,
+        "AdditionalTxnFeePub": 0.0,
+        "PGCharge": 0.0
+      },
+      "SeatDynamic": [
+        {
+          "AirlineCode": "6E",
+          "FlightNumber": "6718",
+          "CraftType": "A321-220",
+          "Origin": "DEL",
+          "Destination": "MAA",
+          "AvailablityType": 0,
+          "Description": 2,
+          "Code": "NoSeat",
+          "RowNo": "0",
+          "SeatType": 0,
+          "SeatWayType": 2,
+          "Compartment": 0,
+          "Deck": 0,
+          "Currency": "INR",
+          "Price": 0.0
+        }
+      ]
+    },
+    {
+      "Title": "Mrs",
+      "FirstName": "Himanshu",
+      "LastName": "yadav",
+      "PaxType": 1,
+      "Gender": 2,
+      "DateOfBirth": "2005-02-01T00:00:00",
+      "AddressLine1": "Houseno.65,VPO Pithrawas, Rewari Haryana",
+      "City": "Rewari",
+      "CountryCode": "IN",
+      "CountryName": "India",
+      "ContactNo": "9896176383",
+      "Email": "nanurao051@gmail.com",
+      "IsLeadPax": false,
+      "Nationality": "IN",
+      "Fare": {
+        "BaseFare": 3100.0,
+        "Tax": 1094.0,
+        "YQTax": 425.0,
+        "AdditionalTxnFeeOfrd": 0.0,
+        "AdditionalTxnFeePub": 0.0,
+        "PGCharge": 0.0
+      },
+      "SeatDynamic": [
+        {
+          "AirlineCode": "6E",
+          "FlightNumber": "6718",
+          "CraftType": "A321-220",
+          "Origin": "DEL",
+          "Destination": "MAA",
+          "AvailablityType": 0,
+          "Description": 2,
+          "Code": "NoSeat",
+          "RowNo": "0",
+          "SeatType": 0,
+          "SeatWayType": 2,
+          "Compartment": 0,
+          "Deck": 0,
+          "Currency": "INR",
+          "Price": 0.0
+        }
+      ]
+    },
+    {
+      "Title": "Mr",
+      "FirstName": "rohan",
+      "LastName": "yadav",
+      "PaxType": 2,
+      "Gender": 1,
+      "DateOfBirth": "2022-02-01T00:00:00",
+      "AddressLine1": "Houseno.65,VPO Pithrawas, Rewari Haryana",
+      "City": "Rewari",
+      "CountryCode": "IN",
+      "CountryName": "India",
+      "ContactNo": "9896176383",
+      "Email": "nanurao051@gmail.com",
+      "IsLeadPax": false,
+      "Nationality": "IN",
+      "Fare": {
+        "BaseFare": 3100.0,
+        "Tax": 1094.0,
+        "YQTax": 425.0,
+        "AdditionalTxnFeeOfrd": 0.0,
+        "AdditionalTxnFeePub": 0.0,
+        "PGCharge": 0.0
+      },
+      "SeatDynamic": [
+        {
+          "AirlineCode": "6E",
+          "FlightNumber": "6718",
+          "CraftType": "A321-220",
+          "Origin": "DEL",
+          "Destination": "MAA",
+          "AvailablityType": 0,
+          "Description": 2,
+          "Code": "NoSeat",
+          "RowNo": "0",
+          "SeatType": 0,
+          "SeatWayType": 2,
+          "Compartment": 0,
+          "Deck": 0,
+          "Currency": "INR",
+          "Price": 0.0
+        }
+      ]
+    },
+    {
+      "Title": "Mrs",
+      "FirstName": "ruhi",
+      "LastName": "yadav",
+      "PaxType": 3,
+      "Gender": 2,
+      "DateOfBirth": "2025-12-09T00:00:00",
+      "AddressLine1": "Houseno.65,VPO Pithrawas, Rewari Haryana",
+      "City": "Rewari",
+      "CountryCode": "IN",
+      "CountryName": "India",
+      "ContactNo": "9896176383",
+      "Email": "nanurao051@gmail.com",
+      "IsLeadPax": false,
+      "Nationality": "IN",
+      "Fare": {
+        "BaseFare": 1667.0,
+        "Tax": 83.0,
+        "YQTax": 0.0,
+        "AdditionalTxnFeeOfrd": 0.0,
+        "AdditionalTxnFeePub": 0.0,
+        "PGCharge": 0.0
+      }
+    }
+  ]
+}
+2026-03-23 14:25:50,646 app.clients.tbo_client INFO → TBO /Ticket (LCC) called
+2026-03-23 14:25:50,646 app.clients.tbo_client INFO TBO TicketLCC request: {
+  "EndUserIp": "172.18.0.1",
+  "TraceId": "eb8999a8-6947-4a25-9f1e-842bbf263774",
+  "ResultIndex": "IB2[TBO]ESIHBIM1OK7V7p8A/rS6fQHTPqIK755mQJIE37QwAl/h/YRPGTBWS96cZBu9bvyEThpBWXyOMujHuw6hZ+QrauHZH85Tc3VbksdVpBQmIFOMt488eQy8vKMD1qlg+mwKW28Kx9xonLQ1RQAps9zhjzSA5EbzusBHmbWvcVX96u8Fre8bV2SgpKOzwi4kdtQF6hHr66aWNiJVTEsR+oomsdZutneM5zkEknFOarO499P0wKfAd6t34F8eFS3C6bjSPz7ScoHYRBcEkPmOs6uSBXuF4KzU301gW9ftaiWGzjLEGhUXsNy8Svb9KZGE8PFXTMLRTy/3yuhIzys4FhUWYSweBkSYn4IVX3YJ/Tc9IudfT4aIpBELHKu3LrtnojTS0Xa1veGx4hzTxhUX8Yx2FYbzveGgCl2T+ie0PldTOP4i6hrDqCeaf0JeQuUclRyy223g5mgs8vFJJBPncG6W55FvMb9z54Ab3ebSi1u6Zf6Sh8xBI9kT0WXN3cubR9f0bJrSbnYnURnX+5fZsZgYALP3pSX6NEAWE5cmirRH3nXHlP4OXOOmt42EPiFwc4+YELqYgzyJ5jckaA2FhlJHWLG+1zQD4tIGg6pFTZIqP/hrH8UF3bn1zVzvhMt9FIilcyetl9eqw0cjjvGZXPdVBBR+CP33m5vT2oGYFUhv6wwcR4kSz5kOsplFbvJxaAsI0sxPDAzFWo3jS474qNGnFocl0Mm3Q6C+nR2/6Dq7VHwVayfXeH+WAOBY58rQF4iTEQNF0RwNZcx5grtCbbuZjmRu25wCsEV4IKVaJ93IqEwQ+QwU6MhwukLj7T1qfrNCtsIk4iZCw9gzofuf9doiBw==",
+  "Passengers": [
+    {
+      "Title": "Mr",
+      "FirstName": "Nanu",
+      "LastName": "Rao",
+      "PaxType": 1,
+      "Gender": 1,
+      "DateOfBirth": "2002-10-09T00:00:00",
+      "AddressLine1": "Houseno.65,VPO Pithrawas, Rewari Haryana",
+      "City": "Rewari",
+      "CountryCode": "IN",
+      "CountryName": "India",
+      "ContactNo": "9896176383",
+      "Email": "nanurao051@gmail.com",
+      "IsLeadPax": true,
+      "Nationality": "IN",
+      "Fare": {
+        "BaseFare": 3100.0,
+        "Tax": 1094.0,
+        "YQTax": 425.0,
+        "AdditionalTxnFeeOfrd": 0.0,
+        "AdditionalTxnFeePub": 0.0,
+        "PGCharge": 0.0
+      },
+      "MealDynamic": [
+        {
+          "AirlineCode": "6E",
+          "FlightNumber": "404",
+          "WayType": 1,
+          "Code": "VBIR",
+          "Description": 2,
+          "AirlineDescription": "VEG BIRYANI Combo",
+          "Quantity": 1,
+          "Currency": "INR",
+          "Price": 0.0,
+          "Origin": "MAA",
+          "Destination": "DEL"
+        }
+      ],
+      "SeatDynamic": [
+        {
+          "AirlineCode": "6E",
+          "FlightNumber": "404",
+          "CraftType": "A321-220",
+          "Origin": "MAA",
+          "Destination": "DEL",
+          "AvailablityType": 0,
+          "Description": 2,
+          "Code": "NoSeat",
+          "RowNo": "0",
+          "SeatType": 0,
+          "SeatWayType": 2,
+          "Compartment": 0,
+          "Deck": 0,
+          "Currency": "INR",
+          "Price": 0.0
+        }
+      ]
+    },
+    {
+      "Title": "Mrs",
+      "FirstName": "Himanshu",
+      "LastName": "yadav",
+      "PaxType": 1,
+      "Gender": 2,
+      "DateOfBirth": "2005-02-01T00:00:00",
+      "AddressLine1": "Houseno.65,VPO Pithrawas, Rewari Haryana",
+      "City": "Rewari",
+      "CountryCode": "IN",
+      "CountryName": "India",
+      "ContactNo": "9896176383",
+      "Email": "nanurao051@gmail.com",
+      "IsLeadPax": false,
+      "Nationality": "IN",
+      "Fare": {
+        "BaseFare": 3100.0,
+        "Tax": 1094.0,
+        "YQTax": 425.0,
+        "AdditionalTxnFeeOfrd": 0.0,
+        "AdditionalTxnFeePub": 0.0,
+        "PGCharge": 0.0
+      },
+      "MealDynamic": [
+        {
+          "AirlineCode": "6E",
+          "FlightNumber": "404",
+          "WayType": 1,
+          "Code": "VBIR",
+          "Description": 2,
+          "AirlineDescription": "VEG BIRYANI Combo",
+          "Quantity": 1,
+          "Currency": "INR",
+          "Price": 0.0,
+          "Origin": "MAA",
+          "Destination": "DEL"
+        }
+      ],
+      "SeatDynamic": [
+        {
+          "AirlineCode": "6E",
+          "FlightNumber": "404",
+          "CraftType": "A321-220",
+          "Origin": "MAA",
+          "Destination": "DEL",
+          "AvailablityType": 0,
+          "Description": 2,
+          "Code": "NoSeat",
+          "RowNo": "0",
+          "SeatType": 0,
+          "SeatWayType": 2,
+          "Compartment": 0,
+          "Deck": 0,
+          "Currency": "INR",
+          "Price": 0.0
+        }
+      ]
+    },
+    {
+      "Title": "Mr",
+      "FirstName": "rohan",
+      "LastName": "yadav",
+      "PaxType": 2,
+      "Gender": 1,
+      "DateOfBirth": "2022-02-01T00:00:00",
+      "AddressLine1": "Houseno.65,VPO Pithrawas, Rewari Haryana",
+      "City": "Rewari",
+      "CountryCode": "IN",
+      "CountryName": "India",
+      "ContactNo": "9896176383",
+      "Email": "nanurao051@gmail.com",
+      "IsLeadPax": false,
+      "Nationality": "IN",
+      "Fare": {
+        "BaseFare": 3100.0,
+        "Tax": 1094.0,
+        "YQTax": 425.0,
+        "AdditionalTxnFeeOfrd": 0.0,
+        "AdditionalTxnFeePub": 0.0,
+        "PGCharge": 0.0
+      },
+      "MealDynamic": [
+        {
+          "AirlineCode": "6E",
+          "FlightNumber": "404",
+          "WayType": 1,
+          "Code": "VBIR",
+          "Description": 2,
+          "AirlineDescription": "VEG BIRYANI Combo",
+          "Quantity": 1,
+          "Currency": "INR",
+          "Price": 0.0,
+          "Origin": "MAA",
+          "Destination": "DEL"
+        }
+      ],
+      "SeatDynamic": [
+        {
+          "AirlineCode": "6E",
+          "FlightNumber": "404",
+          "CraftType": "A321-220",
+          "Origin": "MAA",
+          "Destination": "DEL",
+          "AvailablityType": 0,
+          "Description": 2,
+          "Code": "NoSeat",
+          "RowNo": "0",
+          "SeatType": 0,
+          "SeatWayType": 2,
+          "Compartment": 0,
+          "Deck": 0,
+          "Currency": "INR",
+          "Price": 0.0
+        }
+      ]
+    },
+    {
+      "Title": "Mrs",
+      "FirstName": "ruhi",
+      "LastName": "yadav",
+      "PaxType": 3,
+      "Gender": 2,
+      "DateOfBirth": "2025-12-09T00:00:00",
+      "AddressLine1": "Houseno.65,VPO Pithrawas, Rewari Haryana",
+      "City": "Rewari",
+      "CountryCode": "IN",
+      "CountryName": "India",
+      "ContactNo": "9896176383",
+      "Email": "nanurao051@gmail.com",
+      "IsLeadPax": false,
+      "Nationality": "IN",
+      "Fare": {
+        "BaseFare": 1667.0,
+        "Tax": 83.0,
+        "YQTax": 0.0,
+        "AdditionalTxnFeeOfrd": 0.0,
+        "AdditionalTxnFeePub": 0.0,
+        "PGCharge": 0.0
+      },
+      "MealDynamic": [
+        {
+          "AirlineCode": "6E",
+          "FlightNumber": "404",
+          "WayType": 1,
+          "Code": "VBIR",
+          "Description": 2,
+          "AirlineDescription": "VEG BIRYANI Combo",
+          "Quantity": 1,
+          "Currency": "INR",
+          "Price": 0.0,
+          "Origin": "MAA",
+          "Destination": "DEL"
+        }
+      ]
+    }
+  ]
+}
+2026-03-23 14:25:51,017 httpx INFO HTTP Request: POST http://api.tektravels.com/BookingEngineService_Air/AirService.svc/rest/Ticket "HTTP/1.1 200 OK"
+2026-03-23 14:25:51,019 app.clients.tbo_client INFO TBO TicketLCC response: {
+  "Response": {
+    "B2B2BStatus": false,
+    "Error": {
+      "ErrorCode": 3,
+      "ErrorMessage": "Seat selection is mandatory"
+    },
+    "ResponseStatus": 3,
+    "TraceId": "eb8999a8-6947-4a25-9f1e-842bbf263774",
+    "Response": null
+  }
+}
+2026-03-23 14:25:51,020 app.clients.tbo_client ERROR TBO TicketLCC ERROR (INVALID_REQUEST): Seat selection is mandatory
+2026-03-23 14:25:51,020 app.clients.tbo_client ERROR Full TBO error response: {
+  "Response": {
+    "B2B2BStatus": false,
+    "Error": {
+      "ErrorCode": 3,
+      "ErrorMessage": "Seat selection is mandatory"
+    },
+    "ResponseStatus": 3,
+    "TraceId": "eb8999a8-6947-4a25-9f1e-842bbf263774",
+    "Response": null
+  }
+}
+2026-03-23 14:25:54,721 httpx INFO HTTP Request: POST http://api.tektravels.com/BookingEngineService_Air/AirService.svc/rest/Ticket "HTTP/1.1 200 OK"
+2026-03-23 14:25:54,724 app.clients.tbo_client INFO TBO TicketLCC response: {
+  "Response": {
+    "B2B2BStatus": false,
+    "Error": {
+      "ErrorCode": 0,
+      "ErrorMessage": ""
+    },
+    "ResponseStatus": 1,
+    "TraceId": "eb8999a8-6947-4a25-9f1e-842bbf263774",
+    "Response": {
+      "ItineraryChangeList": null,
+      "PNR": "T2I48K",
+      "BookingId": 2098351,
+      "SSRDenied": false,
+      "SSRMessage": null,
+      "Status": 1,
+      "IsPriceChanged": false,
+      "IsTimeChanged": false,
+      "FlightItinerary": {
+        "CommentDetails": null,
+        "FareClassification": "Saver (Regular)#rgb(182,215,228)",
+        "IsAutoReissuanceAllowed": true,
+        "IsPartialVoidAllowed": true,
+        "IsSeatsBooked": false,
+        "IssuancePcc": "OTI011",
+        "JourneyType": 2,
+        "SearchCombinationType": 1,
+        "SupplierFareClasses": "Saver (Regular)",
+        "TBOConfNo": "TBF83VU80",
+        "TBOTripID": null,
+        "TripIndicator": 1,
+        "BookingAllowedForRoamer": true,
+        "BookingId": 2098351,
+        "IsCouponAppilcable": true,
+        "IsManual": false,
+        "PNR": "T2I48K",
+        "IsDomestic": true,
+        "ResultFareType": "RegularFare",
+        "Source": 6,
+        "Origin": "DEL",
+        "Destination": "MAA",
+        "AirlineCode": "6E",
+        "LastTicketDate": "2026-03-24T01:50:52",
+        "ValidatingAirlineCode": "6E",
+        "AirlineRemark": "6E main",
+        "AirlineTollFreeNo": "1800-0001-5456-51515",
+        "IsLCC": true,
+        "NonRefundable": false,
+        "FareType": "PUB",
+        "CreditNoteNo": null,
+        "Fare": {
+          "CFARAmount": 0,
+          "DCFARAmount": 0,
+          "ServiceFeeDisplayType": 0,
+          "Currency": "INR",
+          "BaseFare": 10967.0,
+          "Tax": 3365,
+          "TaxBreakup": [
+            {
+              "key": "TotalTax",
+              "value": 3282.0
+            },
+            {
+              "key": "K3",
+              "value": 0
+            }
+          ],
+          "YQTax": 1275.0,
+          "AdditionalTxnFeeOfrd": 0,
+          "AdditionalTxnFeePub": 0.0,
+          "PGCharge": 0,
+          "OtherCharges": 0.0,
+          "ChargeBU": [
+            {
+              "key": "TBOMARKUP",
+              "value": 0
+            },
+            {
+              "key": "GLOBALPROCUREMENTCHARGE",
+              "value": 0
+            },
+            {
+              "key": "OTHERCHARGE",
+              "value": 0.0
+            },
+            {
+              "key": "CONVENIENCECHARGE",
+              "value": 0
+            }
+          ],
+          "Discount": 0.0,
+          "PublishedFare": 14332,
+          "CommissionEarned": 171.6,
+          "PLBEarned": 147.24,
+          "IncentiveEarned": 149.7,
+          "OfferedFare": 14050.87,
+          "TdsOnCommission": 68.64,
+          "TdsOnPLB": 58.89,
+          "TdsOnIncentive": 59.88,
+          "ServiceFee": 0,
+          "TotalBaggageCharges": 0.0,
+          "TotalMealCharges": 0.0,
+          "TotalSeatCharges": 0.0,
+          "TotalSpecialServiceCharges": 0.0
+        },
+        "CreditNoteCreatedOn": null,
+        "Passenger": [
+          {
+            "BarcodeDetails": {
+              "Id": 3383197,
+              "Barcode": [
+                {
+                  "Index": 1,
+                  "Format": "PDF417",
+                  "Content": "M1RAO/NANU             T2I48K DELMAA6E 6718 087Y000000000000",
+                  "BarCodeInBase64": null,
+                  "JourneyWayType": 3
+                }
+              ]
+            },
+            "DocumentDetails": null,
+            "GuardianDetails": null,
+            "IsReissued": false,
+            "SegmentDetails": [
+              {
+                "CabinBaggage": {
+                  "FreeText": "7 Kg",
+                  "Unit": "Kg",
+                  "Value": "7"
+                },
+                "CheckedInBaggage": {
+                  "FreeText": "15 Kg",
+                  "Unit": "Kg",
+                  "Value": "15"
+                },
+                "FlightInfoIndex": "1"
+              }
+            ],
+            "PaxId": 3383197,
+            "Title": "Mr",
+            "FirstName": "Nanu",
+            "LastName": "Rao",
+            "PaxType": 1,
+            "DateOfBirth": "2002-10-09T00:00:00",
+            "Gender": 1,
+            "IsPANRequired": false,
+            "IsPassportRequired": false,
+            "PAN": "",
+            "PassportNo": "",
+            "AddressLine1": "Houseno.65,VPO Pithrawas, Rewari Haryana",
+            "Fare": {
+              "CFARAmount": 0,
+              "DCFARAmount": 0,
+              "ServiceFeeDisplayType": 0,
+              "Currency": "INR",
+              "BaseFare": 3100.0,
+              "Tax": 1094,
+              "TaxBreakup": [
+                {
+                  "key": "K3",
+                  "value": 0
+                },
+                {
+                  "key": "TotalTax",
+                  "value": 1094.0
+                }
+              ],
+              "YQTax": 425.0,
+              "AdditionalTxnFeeOfrd": 0,
+              "AdditionalTxnFeePub": 0.0,
+              "PGCharge": 0,
+              "OtherCharges": 0.0,
+              "ChargeBU": [
+                {
+                  "key": "TBOMARKUP",
+                  "value": 0
+                },
+                {
+                  "key": "GLOBALPROCUREMENTCHARGE",
+                  "value": 0
+                },
+                {
+                  "key": "OTHERCHARGE",
+                  "value": 0.0
+                },
+                {
+                  "key": "CONVENIENCECHARGE",
+                  "value": 0
+                }
+              ],
+              "Discount": 0.0,
+              "PublishedFare": 4194,
+              "CommissionEarned": 57.2,
+              "PLBEarned": 49.08,
+              "IncentiveEarned": 49.9,
+              "OfferedFare": 4100.29,
+              "TdsOnCommission": 22.88,
+              "TdsOnPLB": 19.63,
+              "TdsOnIncentive": 19.96,
+              "ServiceFee": 0,
+              "TotalBaggageCharges": 0.0,
+              "TotalMealCharges": 0.0,
+              "TotalSeatCharges": 0.0,
+              "TotalSpecialServiceCharges": 0.0
+            },
+            "City": "Rewari",
+            "CountryCode": "IN",
+            "CountryName": "India",
+            "Nationality": "IN",
+            "ContactNo": "9896176383",
+            "Email": "nanurao051@gmail.com",
+            "IsLeadPax": true,
+            "FFAirlineCode": null,
+            "FFNumber": null,
+            "Baggage": [
+              {
+                "AirlineCode": "6E",
+                "FlightNumber": "6718",
+                "WayType": 2,
+                "Code": "NoBaggage",
+                "Description": 2,
+                "Weight": 0,
+                "Currency": "INR",
+                "Price": 0.0,
+                "Origin": "DEL",
+                "Destination": "MAA"
+              }
+            ],
+            "SeatDynamic": [
+              {
+                "AirlineCode": "6E",
+                "FlightNumber": "6718",
+                "CraftType": "A321-220",
+                "Origin": "DEL",
+                "Destination": "MAA",
+                "AvailablityType": 0,
+                "Description": 2,
+                "Code": "NoSeat",
+                "RowNo": "0",
+                "SeatNo": null,
+                "SeatType": 0,
+                "SeatWayType": 2,
+                "Compartment": 0,
+                "Deck": 0,
+                "Currency": "INR",
+                "Price": 0.0
+              }
+            ],
+            "Ssr": [],
+            "Ticket": {
+              "TicketId": 2391815,
+              "TicketNumber": "T2I48K",
+              "IssueDate": "2026-03-23T19:55:53",
+              "ValidatingAirline": "708",
+              "Remarks": "",
+              "ServiceFeeDisplayType": "ShowInTax",
+              "Status": "OK",
+              "ConjunctionNumber": "",
+              "TicketType": "N"
+            },
+            "SegmentAdditionalInfo": [
+              {
+                "FareBasis": "R3APTL",
+                "NVA": "",
+                "NVB": "",
+                "Baggage": "15 Kg",
+                "Meal": "0 Platter",
+                "Seat": "0",
+                "SpecialService": "",
+                "CabinBaggage": "7 Kg"
+              }
+            ]
+          },
+          {
+            "BarcodeDetails": {
+              "Id": 3383198,
+              "Barcode": [
+                {
+                  "Index": 1,
+                  "Format": "PDF417",
+                  "Content": "M1YADAV/HIMANSHU       T2I48K DELMAA6E 6718 087Y000000000000",
+                  "BarCodeInBase64": null,
+                  "JourneyWayType": 3
+                }
+              ]
+            },
+            "DocumentDetails": null,
+            "GuardianDetails": null,
+            "IsReissued": false,
+            "SegmentDetails": [
+              {
+                "CabinBaggage": {
+                  "FreeText": "7 Kg",
+                  "Unit": "Kg",
+                  "Value": "7"
+                },
+                "CheckedInBaggage": {
+                  "FreeText": "15 Kg",
+                  "Unit": "Kg",
+                  "Value": "15"
+                },
+                "FlightInfoIndex": "1"
+              }
+            ],
+            "PaxId": 3383198,
+            "Title": "Mrs",
+            "FirstName": "Himanshu",
+            "LastName": "yadav",
+            "PaxType": 1,
+            "DateOfBirth": "2005-02-01T00:00:00",
+            "Gender": 2,
+            "IsPANRequired": false,
+            "IsPassportRequired": false,
+            "PAN": "",
+            "PassportNo": "",
+            "AddressLine1": "Houseno.65,VPO Pithrawas, Rewari Haryana",
+            "Fare": {
+              "CFARAmount": 0,
+              "DCFARAmount": 0,
+              "ServiceFeeDisplayType": 0,
+              "Currency": "INR",
+              "BaseFare": 3100.0,
+              "Tax": 1094,
+              "TaxBreakup": [
+                {
+                  "key": "K3",
+                  "value": 0
+                },
+                {
+                  "key": "TotalTax",
+                  "value": 1094.0
+                }
+              ],
+              "YQTax": 425.0,
+              "AdditionalTxnFeeOfrd": 0,
+              "AdditionalTxnFeePub": 0.0,
+              "PGCharge": 0,
+              "OtherCharges": 0.0,
+              "ChargeBU": [
+                {
+                  "key": "TBOMARKUP",
+                  "value": 0
+                },
+                {
+                  "key": "GLOBALPROCUREMENTCHARGE",
+                  "value": 0
+                },
+                {
+                  "key": "OTHERCHARGE",
+                  "value": 0.0
+                },
+                {
+                  "key": "CONVENIENCECHARGE",
+                  "value": 0
+                }
+              ],
+              "Discount": 0.0,
+              "PublishedFare": 4194,
+              "CommissionEarned": 57.2,
+              "PLBEarned": 49.08,
+              "IncentiveEarned": 49.9,
+              "OfferedFare": 4100.29,
+              "TdsOnCommission": 22.88,
+              "TdsOnPLB": 19.63,
+              "TdsOnIncentive": 19.96,
+              "ServiceFee": 0,
+              "TotalBaggageCharges": 0.0,
+              "TotalMealCharges": 0.0,
+              "TotalSeatCharges": 0.0,
+              "TotalSpecialServiceCharges": 0.0
+            },
+            "City": "Rewari",
+            "CountryCode": "IN",
+            "CountryName": "India",
+            "Nationality": "IN",
+            "ContactNo": "9896176383",
+            "Email": "nanurao051@gmail.com",
+            "IsLeadPax": false,
+            "FFAirlineCode": null,
+            "FFNumber": null,
+            "Baggage": [
+              {
+                "AirlineCode": "6E",
+                "FlightNumber": "6718",
+                "WayType": 2,
+                "Code": "NoBaggage",
+                "Description": 2,
+                "Weight": 0,
+                "Currency": "INR",
+                "Price": 0.0,
+                "Origin": "DEL",
+                "Destination": "MAA"
+              }
+            ],
+            "SeatDynamic": [
+              {
+                "AirlineCode": "6E",
+                "FlightNumber": "6718",
+                "CraftType": "A321-220",
+                "Origin": "DEL",
+                "Destination": "MAA",
+                "AvailablityType": 0,
+                "Description": 2,
+                "Code": "NoSeat",
+                "RowNo": "0",
+                "SeatNo": null,
+                "SeatType": 0,
+                "SeatWayType": 2,
+                "Compartment": 0,
+                "Deck": 0,
+                "Currency": "INR",
+                "Price": 0.0
+              }
+            ],
+            "Ssr": [],
+            "Ticket": {
+              "TicketId": 2391816,
+              "TicketNumber": "T2I48K",
+              "IssueDate": "2026-03-23T19:55:53",
+              "ValidatingAirline": "708",
+              "Remarks": "",
+              "ServiceFeeDisplayType": "ShowInTax",
+              "Status": "OK",
+              "ConjunctionNumber": "",
+              "TicketType": "N"
+            },
+            "SegmentAdditionalInfo": [
+              {
+                "FareBasis": "R3APTL",
+                "NVA": "",
+                "NVB": "",
+                "Baggage": "15 Kg",
+                "Meal": "0 Platter",
+                "Seat": "0",
+                "SpecialService": "",
+                "CabinBaggage": "7 Kg"
+              }
+            ]
+          },
+          {
+            "BarcodeDetails": {
+              "Id": 3383199,
+              "Barcode": [
+                {
+                  "Index": 1,
+                  "Format": "PDF417",
+                  "Content": "M1YADAV/ROHAN          T2I48K DELMAA6E 6718 087Y000000000000",
+                  "BarCodeInBase64": null,
+                  "JourneyWayType": 3
+                }
+              ]
+            },
+            "DocumentDetails": null,
+            "GuardianDetails": null,
+            "IsReissued": false,
+            "SegmentDetails": [
+              {
+                "CabinBaggage": {
+                  "FreeText": "7 Kg",
+                  "Unit": "Kg",
+                  "Value": "7"
+                },
+                "CheckedInBaggage": {
+                  "FreeText": "15 Kg",
+                  "Unit": "Kg",
+                  "Value": "15"
+                },
+                "FlightInfoIndex": "1"
+              }
+            ],
+            "PaxId": 3383199,
+            "Title": "Mr",
+            "FirstName": "rohan",
+            "LastName": "yadav",
+            "PaxType": 2,
+            "DateOfBirth": "2022-02-01T00:00:00",
+            "Gender": 1,
+            "IsPANRequired": false,
+            "IsPassportRequired": false,
+            "PAN": "",
+            "PassportNo": "",
+            "AddressLine1": "Houseno.65,VPO Pithrawas, Rewari Haryana",
+            "Fare": {
+              "CFARAmount": 0,
+              "DCFARAmount": 0,
+              "ServiceFeeDisplayType": 0,
+              "Currency": "INR",
+              "BaseFare": 3100.0,
+              "Tax": 1094,
+              "TaxBreakup": [
+                {
+                  "key": "K3",
+                  "value": 0
+                },
+                {
+                  "key": "TotalTax",
+                  "value": 1094.0
+                }
+              ],
+              "YQTax": 425.0,
+              "AdditionalTxnFeeOfrd": 0,
+              "AdditionalTxnFeePub": 0.0,
+              "PGCharge": 0,
+              "OtherCharges": 0.0,
+              "ChargeBU": [
+                {
+                  "key": "TBOMARKUP",
+                  "value": 0
+                },
+                {
+                  "key": "GLOBALPROCUREMENTCHARGE",
+                  "value": 0
+                },
+                {
+                  "key": "OTHERCHARGE",
+                  "value": 0.0
+                },
+                {
+                  "key": "CONVENIENCECHARGE",
+                  "value": 0
+                }
+              ],
+              "Discount": 0.0,
+              "PublishedFare": 4194,
+              "CommissionEarned": 57.2,
+              "PLBEarned": 49.08,
+              "IncentiveEarned": 49.9,
+              "OfferedFare": 4100.29,
+              "TdsOnCommission": 22.88,
+              "TdsOnPLB": 19.63,
+              "TdsOnIncentive": 19.96,
+              "ServiceFee": 0,
+              "TotalBaggageCharges": 0.0,
+              "TotalMealCharges": 0.0,
+              "TotalSeatCharges": 0.0,
+              "TotalSpecialServiceCharges": 0.0
+            },
+            "City": "Rewari",
+            "CountryCode": "IN",
+            "CountryName": "India",
+            "Nationality": "IN",
+            "ContactNo": "9896176383",
+            "Email": "nanurao051@gmail.com",
+            "IsLeadPax": false,
+            "FFAirlineCode": null,
+            "FFNumber": null,
+            "Baggage": [
+              {
+                "AirlineCode": "6E",
+                "FlightNumber": "6718",
+                "WayType": 2,
+                "Code": "NoBaggage",
+                "Description": 2,
+                "Weight": 0,
+                "Currency": "INR",
+                "Price": 0.0,
+                "Origin": "DEL",
+                "Destination": "MAA"
+              }
+            ],
+            "SeatDynamic": [
+              {
+                "AirlineCode": "6E",
+                "FlightNumber": "6718",
+                "CraftType": "A321-220",
+                "Origin": "DEL",
+                "Destination": "MAA",
+                "AvailablityType": 0,
+                "Description": 2,
+                "Code": "NoSeat",
+                "RowNo": "0",
+                "SeatNo": null,
+                "SeatType": 0,
+                "SeatWayType": 2,
+                "Compartment": 0,
+                "Deck": 0,
+                "Currency": "INR",
+                "Price": 0.0
+              }
+            ],
+            "Ssr": [],
+            "Ticket": {
+              "TicketId": 2391817,
+              "TicketNumber": "T2I48K",
+              "IssueDate": "2026-03-23T19:55:54",
+              "ValidatingAirline": "708",
+              "Remarks": "",
+              "ServiceFeeDisplayType": "ShowInTax",
+              "Status": "OK",
+              "ConjunctionNumber": "",
+              "TicketType": "N"
+            },
+            "SegmentAdditionalInfo": [
+              {
+                "FareBasis": "R3APTL",
+                "NVA": "",
+                "NVB": "",
+                "Baggage": "15 Kg",
+                "Meal": "0 Platter",
+                "Seat": "0",
+                "SpecialService": "",
+                "CabinBaggage": "7 Kg"
+              }
+            ]
+          },
+          {
+            "BarcodeDetails": null,
+            "DocumentDetails": null,
+            "GuardianDetails": null,
+            "IsReissued": false,
+            "SegmentDetails": [
+              {
+                "FlightInfoIndex": "1"
+              }
+            ],
+            "PaxId": 3383200,
+            "Title": "Mrs",
+            "FirstName": "ruhi",
+            "LastName": "yadav",
+            "PaxType": 3,
+            "DateOfBirth": "2025-12-09T00:00:00",
+            "Gender": 2,
+            "IsPANRequired": false,
+            "IsPassportRequired": false,
+            "PAN": "",
+            "PassportNo": "",
+            "AddressLine1": "Houseno.65,VPO Pithrawas, Rewari Haryana",
+            "Fare": {
+              "CFARAmount": 0,
+              "DCFARAmount": 0,
+              "ServiceFeeDisplayType": 0,
+              "Currency": "INR",
+              "BaseFare": 1667.0,
+              "Tax": 83,
+              "TaxBreakup": [
+                {
+                  "key": "K3",
+                  "value": 0
+                }
+              ],
+              "YQTax": 0.0,
+              "AdditionalTxnFeeOfrd": 0,
+              "AdditionalTxnFeePub": 0.0,
+              "PGCharge": 0,
+              "OtherCharges": 0.0,
+              "ChargeBU": [
+                {
+                  "key": "TBOMARKUP",
+                  "value": 0
+                },
+                {
+                  "key": "GLOBALPROCUREMENTCHARGE",
+                  "value": 0
+                },
+                {
+                  "key": "OTHERCHARGE",
+                  "value": 0.0
+                },
+                {
+                  "key": "CONVENIENCECHARGE",
+                  "value": 0
+                }
+              ],
+              "Discount": 0.0,
+              "PublishedFare": 1750,
+              "CommissionEarned": 0,
+              "PLBEarned": 0,
+              "IncentiveEarned": 0,
+              "OfferedFare": 1750.0,
+              "TdsOnCommission": 0,
+              "TdsOnPLB": 0,
+              "TdsOnIncentive": 0,
+              "ServiceFee": 0,
+              "TotalBaggageCharges": 0.0,
+              "TotalMealCharges": 0.0,
+              "TotalSeatCharges": 0.0,
+              "TotalSpecialServiceCharges": 0.0
+            },
+            "City": "Rewari",
+            "CountryCode": "IN",
+            "CountryName": "India",
+            "Nationality": "IN",
+            "ContactNo": "9896176383",
+            "Email": "nanurao051@gmail.com",
+            "IsLeadPax": false,
+            "FFAirlineCode": null,
+            "FFNumber": null,
+            "Ssr": [],
+            "Ticket": {
+              "TicketId": 2391818,
+              "TicketNumber": "T2I48K",
+              "IssueDate": "2026-03-23T19:55:54",
+              "ValidatingAirline": "708",
+              "Remarks": "",
+              "ServiceFeeDisplayType": "ShowInTax",
+              "Status": "OK",
+              "ConjunctionNumber": "",
+              "TicketType": "N"
+            },
+            "SegmentAdditionalInfo": [
+              {
+                "FareBasis": "R3APTL",
+                "NVA": "",
+                "NVB": "",
+                "Baggage": "0 Kg",
+                "Meal": "0 Platter",
+                "Seat": "",
+                "SpecialService": "",
+                "CabinBaggage": ""
+              }
+            ]
+          }
+        ],
+        "CancellationCharges": null,
+        "Segments": [
+          {
+            "Baggage": "15 Kilograms",
+            "CabinBaggage": "7 KG ",
+            "CabinClass": 2,
+            "SupplierFareClass": null,
+            "TripIndicator": 1,
+            "SegmentIndicator": 1,
+            "Airline": {
+              "AirlineCode": "6E",
+              "AirlineName": "IndiGo",
+              "FlightNumber": "6718",
+              "FareClass": "RR",
+              "OperatingCarrier": ""
+            },
+            "AirlinePNR": "",
+            "Origin": {
+              "Airport": {
+                "AirportCode": "DEL",
+                "AirportName": "Indira Gandhi Airport",
+                "Terminal": "1",
+                "CityCode": "DEL",
+                "CityName": "Delhi",
+                "CountryCode": "IN",
+                "CountryName": "India"
+              },
+              "DepTime": "2026-03-28T07:10:00"
+            },
+            "Destination": {
+              "Airport": {
+                "AirportCode": "MAA",
+                "AirportName": "Chennai International Airport",
+                "Terminal": "1",
+                "CityCode": "MAA",
+                "CityName": "Chennai",
+                "CountryCode": "IN",
+                "CountryName": "India"
+              },
+              "ArrTime": "2026-03-28T09:50:00"
+            },
+            "Duration": 160,
+            "GroundTime": 0,
+            "Mile": 0,
+            "StopOver": false,
+            "FlightInfoIndex": "1",
+            "StopPoint": "",
+            "StopPointArrivalTime": "0001-01-01T00:00:00",
+            "StopPointDepartureTime": "0001-01-01T00:00:00",
+            "Craft": "321",
+            "Remark": "Saver (Regular)",
+            "IsETicketEligible": true,
+            "FlightStatus": "Confirmed",
+            "Status": "HK",
+            "FareClassification": {
+              "Color": "rgb(182,215,228)",
+              "Type": "Saver (Regular)"
+            }
+          }
+        ],
+        "FareRules": [
+          {
+            "Origin": "DEL",
+            "Destination": "MAA",
+            "Airline": "6E",
+            "FareBasisCode": "R3APTL",
+            "FareRuleDetail": "The FareBasisCode is: R3APTL<br />Temp Fare Rules GG<br/> <br/><ul><li>GST, RAF AND ANY OTHER APPLICABLE CHARGES ARE EXTRA.</li><li>FEES ARE INDICATIVE PER PAX AND PER SECTOR.</li><li>FOR DOMESTIC BOOKINGS, PASSENGERS MUST SUBMIT THE CANCELLATION OR REISSUE REQUEST AT LEAST 2 HOURS BEFORE THE TIME LIMIT DEFINED IN THE AIRLINE's POLICY.</li><li>FOR INTERNATIONAL BOOKINGS, PASSENGERS MUST SUBMIT THE CANCELLATION OR REISSUE REQUEST AT LEAST 4 HOURS BEFORE THE TIME LIMIT DEFINED IN THE AIRLINE's POLICY.</li></ul>",
+            "FareRestriction": null,
+            "FareInclusions": [
+              "Temp Fare Rules GG"
+            ]
+          }
+        ],
+        "MiniFareRules": [
+          {
+            "CFARExcludedDetails": null,
+            "JourneyPoints": "DEL-MAA",
+            "Type": "Reissue",
+            "From": "0",
+            "To": "3",
+            "Unit": "DAYS",
+            "Details": "INR 2999",
+            "OnlineReissueAllowed": false,
+            "OnlineRefundAllowed": false
+          },
+          {
+            "CFARExcludedDetails": null,
+            "JourneyPoints": "DEL-MAA",
+            "Type": "Reissue",
+            "From": "4",
+            "To": "",
+            "Unit": "DAYS",
+            "Details": "INR 2250",
+            "OnlineReissueAllowed": false,
+            "OnlineRefundAllowed": false
+          },
+          {
+            "CFARExcludedDetails": null,
+            "JourneyPoints": "DEL-MAA",
+            "Type": "Cancellation",
+            "From": "0",
+            "To": "3",
+            "Unit": "DAYS",
+            "Details": "INR 3999",
+            "OnlineReissueAllowed": false,
+            "OnlineRefundAllowed": false
+          },
+          {
+            "CFARExcludedDetails": null,
+            "JourneyPoints": "DEL-MAA",
+            "Type": "Cancellation",
+            "From": "4",
+            "To": "",
+            "Unit": "DAYS",
+            "Details": "INR 2999",
+            "OnlineReissueAllowed": false,
+            "OnlineRefundAllowed": false
+          },
+          {
+            "CFARExcludedDetails": null,
+            "JourneyPoints": "DEL-MAA",
+            "Type": "Reissue",
+            "From": "44",
+            "To": "444",
+            "Unit": "HOURS",
+            "Details": "Unchangeble",
+            "OnlineReissueAllowed": false,
+            "OnlineRefundAllowed": false
+          }
+        ],
+        "PenaltyCharges": {},
+        "Status": 5,
+        "Invoice": [
+          {
+            "CreditNoteGSTIN": null,
+            "GSTIN": null,
+            "InvoiceCreatedOn": "2026-03-23T19:55:54",
+            "InvoiceId": 55699,
+            "InvoiceNo": "DW/2526/55699",
+            "InvoiceAmount": 14051.0,
+            "Remarks": "",
+            "InvoiceStatus": 3
+          }
+        ],
+        "InvoiceAmount": 14051.0,
+        "InvoiceNo": "DW/2526/55699",
+        "InvoiceStatus": 3,
+        "InvoiceCreatedOn": "2026-03-23T19:55:54",
+        "Remarks": "",
+        "IsWebCheckInAllowed": false
+      },
+      "TicketStatus": 1
+    }
+  }
+}
+2026-03-23 14:25:54,726 app.services.booking_service INFO Persisting booking from ticket response (payment_id=17, direction=outbound, trip_type=roundtrip)
+2026-03-23 14:25:54,729 sqlalchemy.engine.Engine INFO INSERT INTO bookings (user_id, payment_id, provider, provider_booking_id, pnr, trip_type, direction, linked_booking_id, origin, destination, airline_code, is_lcc, is_domestic, status, ticket_status, currency, base_fare, tax, total_fare, is_refundable, provider_raw) VALUES ($1::INTEGER, $2::INTEGER, $3::VARCHAR, $4::INTEGER, $5::VARCHAR, $6::VARCHAR, $7::VARCHAR, $8::INTEGER, $9::VARCHAR, $10::VARCHAR, $11::VARCHAR, $12::BOOLEAN, $13::BOOLEAN, $14::VARCHAR, $15::INTEGER, $16::VARCHAR, $17::NUMERIC(12, 2), $18::NUMERIC(12, 2), $19::NUMERIC(12, 2), $20::BOOLEAN, $21::JSON) RETURNING bookings.id, bookings.created_at, bookings.updated_at
+2026-03-23 14:25:54,729 sqlalchemy.engine.Engine INFO [cached since 1866s ago] (None, 17, 'tbo', 2098351, 'T2I48K', 'roundtrip', 'outbound', None, 'DEL', 'MAA', '6E', True, True, 'confirmed', 1, 'INR', Decimal('10967.0'), Decimal('3365.0'), Decimal('14332.0'), True, '{"Response": {"ResponseStatus": 1, "Error": {"ErrorCode": 0, "ErrorMessage": ""}, "TraceId": "eb8999a8-6947-4a25-9f1e-842bbf263774", "B2B2BStatus": f ... (14338 characters truncated) ...  "CreditNoteNo": null, "CreditNoteCreatedOn": null, "CancellationCharges": null, "IsWebCheckInAllowed": false}, "Message": null, "TicketStatus": 1}}}')
+2026-03-23 14:25:54,734 sqlalchemy.engine.Engine INFO INSERT INTO booking_passengers (booking_id, title, first_name, last_name, pax_type, gender, date_of_birth, email, contact_no, is_lead_pax, nationality, passport_no, provider_pax_id, ticket_number, base_fare, tax) SELECT p0::INTEGER, p1::VARCHAR, p2:: ... 1298 characters truncated ... ers.id, booking_passengers.created_at, booking_passengers.updated_at, booking_passengers.id AS id__1
+2026-03-23 14:25:54,734 sqlalchemy.engine.Engine INFO [cached since 1328s ago (insertmanyvalues) 1/1 (ordered)] (21, 'Mr', 'Nanu', 'Rao', <PassengerType.ADULT: 1>, 1, datetime.date(2002, 10, 9), 'nanurao051@gmail.com', '9896176383', True, 'IN', '', 3383197, 'T2I48K', Decimal('3100.0'), Decimal('1094.0'), 21, 'Mrs', 'Himanshu', 'yadav', <PassengerType.ADULT: 1>, 2, datetime.date(2005, 2, 1), 'nanurao051@gmail.com', '9896176383', False, 'IN', '', 3383198, 'T2I48K', Decimal('3100.0'), Decimal('1094.0'), 21, 'Mr', 'rohan', 'yadav', <PassengerType.CHILD: 2>, 1, datetime.date(2022, 2, 1), 'nanurao051@gmail.com', '9896176383', False, 'IN', '', 3383199, 'T2I48K', Decimal('3100.0'), Decimal('1094.0'), 21, 'Mrs', 'ruhi', 'yadav', <PassengerType.INFANT: 3>, 2, datetime.date(2025, 12, 9), 'nanurao051@gmail.com', '9896176383', False, 'IN', '', 3383200, 'T2I48K', Decimal('1667.0'), Decimal('83.0'))
+2026-03-23 14:25:54,736 app.services.booking_service INFO Booking persisted (booking_id=21, pnr=T2I48K, ticket_status=1)
+2026-03-23 14:25:54,737 sqlalchemy.engine.Engine INFO INSERT INTO bookings (user_id, payment_id, provider, provider_booking_id, pnr, trip_type, direction, linked_booking_id, origin, destination, airline_code, is_lcc, is_domestic, status, ticket_status, base_fare, tax, total_fare, is_refundable, provider_raw) VALUES ($1::INTEGER, $2::INTEGER, $3::VARCHAR, $4::INTEGER, $5::VARCHAR, $6::VARCHAR, $7::VARCHAR, $8::INTEGER, $9::VARCHAR, $10::VARCHAR, $11::VARCHAR, $12::BOOLEAN, $13::BOOLEAN, $14::VARCHAR, $15::INTEGER, $16::NUMERIC(12, 2), $17::NUMERIC(12, 2), $18::NUMERIC(12, 2), $19::BOOLEAN, $20::JSON) RETURNING bookings.id, bookings.currency, bookings.created_at, bookings.updated_at
+2026-03-23 14:25:54,737 sqlalchemy.engine.Engine INFO [cached since 1697s ago] (None, 17, 'tbo', 0, 'PENDING', 'roundtrip', 'inbound', None, '', '', '', True, True, 'pending', 0, Decimal('0'), Decimal('0'), Decimal('0'), False, '{"error": "TBO TicketLCC Error: Seat selection is mandatory"}')
+2026-03-23 14:25:54,738 sqlalchemy.engine.Engine INFO COMMIT
+2026-03-23 14:25:54,741 uvicorn.access INFO 172.18.0.1:59392 - "POST /api/v1/flights/booking/confirm HTTP/1.1" 200
+2026-03-23 14:25:58,303 app.utils.email INFO Staff alert email sent: [BOOKING FAILED] Nanu Rao — ea20
+2026-03-23 14:25:58,303 app.utils.eticket_pdf INFO generate_eticket_pdf called: top-level keys=['Response']
+2026-03-23 14:25:58,304 app.utils.eticket_pdf INFO generate_eticket_pdf: itinerary found — passengers=4, segments=1
+2026-03-23 14:26:02,092 app.utils.email INFO Customer e-ticket email sent to nanurao051@gmail.com for PNR T2I48K
