@@ -37,10 +37,6 @@ const formatTime = (t) =>
         hour: "2-digit",
         minute: "2-digit",
       })
-    ? new Date(t).toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      })
     : "--";
 
 const formatDate = (t) =>
@@ -79,7 +75,7 @@ function CopyButton({ text }) {
       className="ml-2 p-1.5 rounded-lg hover:bg-white/20 transition-colors"
       title="Copy PNR"
       type="button"
-      type="button"
+      
     >
       {copied ? (
         <Check className="w-4 h-4 text-emerald-300" />
@@ -223,6 +219,7 @@ export default function BookingConfirmationPage() {
   }, [state]);
 
   const { booking, outboundFlight, inboundFlight } = pageData;
+  
 
   if (!booking) {
     return (
@@ -232,7 +229,7 @@ export default function BookingConfirmationPage() {
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           className="text-center mt-32 space-y-4 px-4"
-          className="text-center mt-32 space-y-4 px-4"
+          
         >
           <Info className="w-12 h-12 text-gray-300 mx-auto" />
           <p className="text-gray-500">No booking information available.</p>
@@ -240,7 +237,7 @@ export default function BookingConfirmationPage() {
             onClick={() => navigate("/")}
             className="px-6 py-2.5 bg-gradient-to-r from-[#FF2E57] to-[#0047FF] text-white rounded-full font-semibold hover:shadow-lg transition-all"
             type="button"
-            type="button"
+            
           >
             Go to Home
           </button>
@@ -545,22 +542,24 @@ export default function BookingConfirmationPage() {
                         pax.inboundSeatNumbers?.filter(Boolean).join(" · ") ||
                         "--";
 
-          return (
-            <div
-              key={i}
-              className="rounded-xl border border-gray-100 bg-gray-50 p-4"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="font-semibold text-gray-900">
-                    {pax.title} {pax.firstName} {pax.lastName}
-                  </p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    {PAX_LABELS[pax.paxType] || "Adult"}
-                  </p>
-                </div>
-                <span className="text-xs text-gray-400">#{i + 1}</span>
-              </div>
+                      return (
+                        <div
+                          key={i}
+                          className="rounded-xl border border-gray-100 bg-gray-50 p-4"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <p className="font-semibold text-gray-900">
+                                {pax.title} {pax.firstName} {pax.lastName}
+                              </p>
+                              <p className="text-xs text-gray-500 mt-1">
+                                {PAX_LABELS[pax.paxType] || "Adult"}
+                              </p>
+                            </div>
+                            <span className="text-xs text-gray-400">
+                              #{i + 1}
+                            </span>
+                          </div>
 
                           <div className="mt-3 space-y-1.5 text-xs text-gray-600">
                             <p>Outbound PNR: {outboundLeg?.providerPnr || "--"}</p>
@@ -660,7 +659,9 @@ export default function BookingConfirmationPage() {
                   <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-2xl p-4">
                     <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
                     <div>
-                      <p className="font-semibold text-sm text-amber-800">Notice</p>
+                      <p className="font-semibold text-sm text-amber-800">
+                        Notice
+                      </p>
                       <p className="text-sm text-amber-700 mt-0.5">
                         {outboundLeg?.providerPriceChanged ||
                         inboundLeg?.providerPriceChanged
@@ -779,8 +780,6 @@ export default function BookingConfirmationPage() {
                         value={`₹${currencyFmt(displayInvoiceAmount)}`}
                       />
                     )}
-
-                    
                   </div>
 
                   {(isConfirmed || isPartial) && (
