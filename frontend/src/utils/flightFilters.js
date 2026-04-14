@@ -10,6 +10,10 @@
  * Usage:
  *   import { filterFlights } from "../utils/flightFilters";
  *   const visible = filterFlights(outboundFlights, filters.outbound, filters.maxPrice);
+ *
+ *   // International return — two passes, same array:
+ *   const step1  = filterFlights(outboundFlights, filters.outbound, filters.maxPrice);
+ *   const result = filterFlights(step1, filters.inbound, null, "inbound");
  */
 
 /**
@@ -44,6 +48,42 @@ export function getDepartureHour(flightGroup) {
     if (!flightGroup?.departureTime) return null;
     const date = new Date(flightGroup.departureTime);
     return Number.isNaN(date.getTime()) ? null : date.getHours();
+}
+
+/**
+ * Parse a departure time string into an hour (0–23), or null if unparseable.
+ * Used internally for inbound legs which store departure time on the segment, not on the group.
+ */
+function parseHour(depTime) {
+    if (!depTime) return null;
+    const d = new Date(depTime);
+    return Number.isNaN(d.getTime()) ? null : d.getHours();
+}
+
+/**
+ * Extract the stop count, departure hour, and airline name for a given direction.
+ *
+ * Outbound: reads top-level FlightGroup fields (noOfStops, departureTime, carrier in segments[0]).
+ * Inbound:  reads fares[0].segments[1] directly — the transformer does not denormalize
+ *           inbound properties onto FlightGroup top-level fields.
+ *
+ * This is the only place that knows about the outbound/inbound asymmetry.
+ */
+function extractDirectionData(flightGroup, direction) {
+    if (direction !== "inbound") {
+        return {
+            stops:   flightGroup?.noOfStops ?? 0,
+            depHour: getDepartureHour(flightGroup),
+            airline: getAirlineName(flightGroup),
+        };
+    }
+    // Inbound (international return only): segments[1] = inbound legs array
+    const legs = flightGroup?.fares?.[0]?.segments?.[1] ?? [];
+    return {
+        stops:   Math.max(legs.length - 1, 0),
+        depHour: parseHour(legs[0]?.departureTime ?? null),
+        airline: legs[0]?.carrier?.name ?? "",
+    };
 }
 
 /**
@@ -83,38 +123,35 @@ export function matchesTimeSlot(hour, timeSlots = {}) {
  * Each filter is independent — a group must pass ALL active filters to be included.
  * Within the stop filter, checked options use OR logic (pass if matching ANY checked option).
  *
- * Why early-return (return false) instead of building a boolean:
- *   We exit as soon as one filter fails. For long flight lists this is faster
- *   than computing all conditions and ANDing them at the end.
+ * direction="outbound" (default): reads top-level FlightGroup denorm fields.
+ * direction="inbound":            reads fares[0].segments[1] for inbound leg properties.
+ *                                 Used as a second-pass filter for international return.
+ *                                 Price is NOT re-checked on inbound pass (already filtered).
  *
  * @param {Array}       flightGroups     outboundFlights or inboundFlights from store
  * @param {object}      directionFilters filters.outbound or filters.inbound from store
  * @param {number|null} maxPrice         filters.maxPrice from store; null = no price filter
+ * @param {string}      direction        "outbound" (default) or "inbound"
  * @returns {Array}     filtered subset — new array, original is not mutated
  */
 export function filterFlights(
     flightGroups,
     directionFilters = {},
     maxPrice = null,
+    direction = "outbound",
 ) {
     return flightGroups.filter((flightGroup) => {
         // ── Price filter ──────────────────────────────────────────────────────────
-        // lowestPrice = fares[0].totalPrice (fares are sorted ascending by price).
-        // It is a required float on FlightGroup — always present.
-        // We compare against the cheapest fare: if even the cheapest option is above
-        // maxPrice, the entire flight card is hidden.
-        // Fares above maxPrice that exist within the same group are still shown
-        // inside the fare modal — filtering those is the fare modal's concern.
-        if (maxPrice != null && flightGroup.lowestPrice > maxPrice)
+        // Skipped on the inbound pass — price was already applied during the outbound pass.
+        // lowestPrice = fares[0].totalPrice (fares sorted ascending); always present.
+        if (direction !== "inbound" && maxPrice != null && flightGroup.lowestPrice > maxPrice)
             return false;
 
-        const stops = getStopsCount(flightGroup);
-        const airline = getAirlineName(flightGroup);
-        const depHour = getDepartureHour(flightGroup);
+        const { stops, depHour, airline } = extractDirectionData(flightGroup, direction);
 
         // ── Stop filter (OR logic) ────────────────────────────────────────────────
-        // noOfStops comes from FlightGroup directly — no segment counting needed.
-        // Only activate if at least one option is checked.
+        // noOfStops for outbound comes from FlightGroup directly.
+        // For inbound it is derived from legs.length - 1 in extractDirectionData.
         // nonStop=true, oneStop=true → show 0-stop AND 1-stop (OR, not AND)
         // nonStop=true, oneStop=false → show only 0-stop flights
         const stopFilterActive =

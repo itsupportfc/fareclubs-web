@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { motion } from "framer-motion";
 import useFlightStore from "../store/useFlightStore";
 import Navbar from "../components/Home/Navbar";
@@ -37,7 +37,6 @@ const getFlightBaggage = (flight) => {
 // Extract inbound legs from a clubbed international return fare.
 // For domestic flights, segments[1] doesn't exist → returns [].
 const getReturnLegs = (flight) => getLowestFare(flight)?.segments?.[1] || [];
-
 
 /* ================= PAGE ================= */
 export default function ReturnResultsPage() {
@@ -90,15 +89,94 @@ export default function ReturnResultsPage() {
         setSelectedFlight({ outbound: flight, inbound: flight });
     };
 
-    const filteredOutboundFlights = useMemo(
-        () => filterFlights(outboundFlights, filters.outbound, filters.maxPrice),
+    // Pass 1: outbound filters + price (applies to all trip types)
+    const outboundFiltered = useMemo(
+        () =>
+            filterFlights(outboundFlights, filters.outbound, filters.maxPrice),
         [outboundFlights, filters],
     );
 
-    const filteredInboundFlights = useMemo(
-        () => filterFlights(inboundFlights, filters.inbound, filters.maxPrice),
-        [inboundFlights, filters],
+    // Pass 2 (international return only): inbound filters on the already-filtered array.
+    // Reads segments[1] for stop count / departure time / carrier via direction="inbound".
+    // Price is null — already checked in pass 1.
+    const filteredOutboundFlights = useMemo(
+        () =>
+            isInternationalReturn
+                ? filterFlights(
+                      outboundFiltered,
+                      filters.inbound,
+                      null,
+                      "inbound",
+                  )
+                : outboundFiltered,
+        [outboundFiltered, filters.inbound, isInternationalReturn],
     );
+
+    // Domestic return: inboundFlights is an independent list, filter it separately.
+    // International return: inboundFlights is always [] — nothing to filter.
+    const filteredInboundFlights = useMemo(
+        () =>
+            isInternationalReturn
+                ? []
+                : filterFlights(
+                      inboundFlights,
+                      filters.inbound,
+                      filters.maxPrice,
+                  ),
+        [inboundFlights, filters, isInternationalReturn],
+    );
+
+    useEffect(() => {
+        if (
+            selectedOutbound &&
+            !filteredOutboundFlights.some(
+                (f) => f.groupId === selectedOutbound.groupId,
+            )
+        ) {
+            setSelectedOutboundState(null);
+
+            if (tripConfig.hasSeparateLists) {
+                setSelectedFlight({
+                    outbound: null,
+                    inbound: selectedInbound,
+                });
+            } else {
+                setSelectedInboundState(null);
+                setSelectedFlight({
+                    outbound: null,
+                    inbound: null,
+                });
+            }
+        }
+    }, [
+        selectedOutbound,
+        selectedInbound,
+        filteredOutboundFlights,
+        tripConfig.hasSeparateLists,
+        setSelectedFlight,
+    ]);
+
+    useEffect(() => {
+        if (
+            tripConfig.hasSeparateLists &&
+            selectedInbound &&
+            !filteredInboundFlights.some(
+                (f) => f.groupId === selectedInbound.groupId,
+            )
+        ) {
+            setSelectedInboundState(null);
+            setSelectedFlight({
+                outbound: selectedOutbound,
+                inbound: null,
+            });
+        }
+    }, [
+        tripConfig.hasSeparateLists,
+        selectedInbound,
+        selectedOutbound,
+        filteredInboundFlights,
+        setSelectedFlight,
+    ]);
 
     const totalPrice = useMemo(() => {
         return tripConfig.getDisplayPrice(selectedOutbound, selectedInbound);
@@ -149,16 +227,7 @@ export default function ReturnResultsPage() {
                         <h2 className="font-display text-xl mb-4">
                             Round-trip Flights
                         </h2>
-                        <motion.div
-                            initial="hidden"
-                            animate="visible"
-                            variants={{
-                                hidden: {},
-                                visible: {
-                                    transition: { staggerChildren: 0.06 },
-                                },
-                            }}
-                        >
+                        <div>
                             {filteredOutboundFlights.map((f) => (
                                 <InternationalFlightCard
                                     key={f.groupId}
@@ -170,7 +239,7 @@ export default function ReturnResultsPage() {
                                     onShowDetails={setDetailsFlight}
                                 />
                             ))}
-                        </motion.div>
+                        </div>
                     </div>
                 )}
             </div>
@@ -274,28 +343,27 @@ function FlightColumn({ title, flights, selected, onSelect, onDetails }) {
     return (
         <div>
             <h2 className="font-display text-xl mb-4">{title}</h2>
-            <motion.div
-                initial="hidden"
-                animate="visible"
-                variants={{
-                    hidden: {},
-                    visible: { transition: { staggerChildren: 0.06 } },
-                }}
-            >
-                {flights.map((f) => (
-                    <FlightCard
-                        key={f.groupId}
-                        flight={f}
-                        isSelected={selected?.groupId === f.groupId}
-                        onSelect={onSelect}
-                        onShowDetails={onDetails}
-                    />
-                ))}
-            </motion.div>
+
+            {flights.length === 0 ? (
+                <div className="bg-white border border-gray-100 rounded-xl p-8 text-center text-gray-500">
+                    No flights match the current filters
+                </div>
+            ) : (
+                <div>
+                    {flights.map((f) => (
+                        <FlightCard
+                            key={f.groupId}
+                            flight={f}
+                            isSelected={selected?.groupId === f.groupId}
+                            onSelect={onSelect}
+                            onShowDetails={onDetails}
+                        />
+                    ))}
+                </div>
+            )}
         </div>
     );
 }
-
 /* ================= FLIGHT CARD ================= */
 function FlightCard({ flight, isSelected, onSelect, onShowDetails }) {
     const legs = getLegs(flight);
@@ -304,10 +372,8 @@ function FlightCard({ flight, isSelected, onSelect, onShowDetails }) {
 
     return (
         <motion.div
-            variants={{
-                hidden: { opacity: 0, y: 12 },
-                visible: { opacity: 1, y: 0 },
-            }}
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3 }}
             onClick={() => onSelect(flight)}
             className={`p-4 mb-4 rounded-xl border cursor-pointer transition-all duration-200 ${
@@ -573,10 +639,8 @@ function InternationalFlightCard({
 
     return (
         <motion.div
-            variants={{
-                hidden: { opacity: 0, y: 12 },
-                visible: { opacity: 1, y: 0 },
-            }}
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3 }}
             onClick={() => onSelect(flight)}
             className={`p-4 mb-4 rounded-xl border cursor-pointer transition-all duration-200 ${

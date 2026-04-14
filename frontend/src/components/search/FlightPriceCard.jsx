@@ -53,7 +53,7 @@ export default function FlightPriceCard({ flight, onViewFares = () => {} }) {
 
   if (!flight || !lowestFare) return null;
 
-  const fareId = lowestFare.FareId;
+  const fareId = lowestFare.fareId;
   const segments = lowestFare.segments?.flat() || [];
   if (!segments.length) return null;
 
