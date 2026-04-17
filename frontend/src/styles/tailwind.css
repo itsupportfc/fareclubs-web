@@ -13,40 +13,40 @@
   --color-bg-light: #f2f2f2;
 
   /* Animations */
-  @keyframes plane-fly {
-    0% { transform: translateX(-100px); opacity: 0; }
-    10% { opacity: 1; }
-    90% { opacity: 1; }
-    100% { transform: translateX(100vw); opacity: 0; }
-  }
-
-  @keyframes progress {
-    0% { transform: translateX(-100%); }
-    100% { transform: translateX(100%); }
-  }
-
   @keyframes shimmer {
-    0% { background-position: -200% 0; }
-    100% { background-position: 200% 0; }
+    0% { background-position: -300% 0; }
+    100% { background-position: 300% 0; }
   }
 
-  --animate-plane-fly: plane-fly 3s ease-in-out infinite;
-  --animate-progress: progress 1.5s ease-in-out infinite;
   --animate-shimmer: shimmer 1.5s ease-in-out infinite;
 }
 
-@keyframes plane-glide {
-  0% { transform: translateX(0) translateY(-50%); }
-  50% { transform: translateX(100px) translateY(-60%); }
-  100% { transform: translateX(200px) translateY(-50%); }
-}
-
-.animate-plane-glide {
-  animation: plane-glide 2s ease-in-out infinite alternate;
-}
-
 .shimmer-bg {
-  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
-  background-size: 200% 100%;
-  animation: shimmer 1.5s ease-in-out infinite;
+  background: linear-gradient(90deg, #e5e7eb 0%, #f9fafb 50%, #e5e7eb 100%);
+  background-size: 300% 100%;
+  animation: shimmer 1.2s linear infinite;
 }
+
+/* ✈️ Plane animation */
+@keyframes plane-fly {
+  0% {
+    transform: translateX(-60px) translateY(-50%);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(600px) translateY(-50%);
+    opacity: 0;
+  }
+}
+
+.animate-plane-fly {
+  animation: plane-fly 3.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  will-change: transform;
+}
+

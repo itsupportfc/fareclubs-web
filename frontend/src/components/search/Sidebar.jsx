@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import useFlightStore from "../../store/useFlightStore";
 import { resolveTripConfig } from "../../config/tripConfig";
-
+import { useShallow } from "zustand/react/shallow";
 /* ─────────────────────────────────────────────────────────────
    deriveAirlines
    Scans a flight list and returns a sorted array of unique airline names.
@@ -322,11 +322,22 @@ const Sidebar = ({
         inboundFlights: storeInboundFlights,
         tripType,
         isInternationalReturn,
-        filters = {},
+        filters,
         priceRange,
         setFilters,
         setMaxPrice,
-    } = useFlightStore();
+    } = useFlightStore(
+        useShallow((s) => ({
+            outboundFlights: s.outboundFlights,
+            inboundFlights: s.inboundFlights,
+            tripType: s.tripType,
+            isInternationalReturn: s.isInternationalReturn,
+            filters: s.filters,
+            priceRange: s.priceRange,
+            setFilters: s.setFilters,
+            setMaxPrice: s.setMaxPrice,
+        })),
+    );
 
     const outboundFlights = outboundFlightsProp || storeOutboundFlights || [];
     const inboundFlights = inboundFlightsProp || storeInboundFlights || [];

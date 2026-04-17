@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import useFlightStore from "../../store/useFlightStore";
 import AirportAutocomplete from "../AirportAutocomplete";
-
+import { useShallow } from "zustand/react/shallow";
 const images = [
     "https://www.fareclubs.com/nav/file/2/Zero",
     "https://www.fareclubs.com/nav/file/2/Ebix",
@@ -36,7 +36,27 @@ function SearchPanel() {
         searchFlights,
         isLoading,
         error,
-    } = useFlightStore();
+    } = useFlightStore(
+        useShallow((s) => ({
+            origin: s.origin,
+            destination: s.destination,
+            departDate: s.departDate,
+            returnDate: s.returnDate,
+            adults: s.adults,
+            children: s.children,
+            infants: s.infants,
+            travelClass: s.travelClass,
+            tripType: s.tripType,
+            setOrigin: s.setOrigin,
+            setDestination: s.setDestination,
+            setDepartDate: s.setDepartDate,
+            setReturnDate: s.setReturnDate,
+            setTripType: s.setTripType,
+            searchFlights: s.searchFlights,
+            isLoading: s.isLoading,
+            error: s.error,
+        })),
+    );
 
     const totalPassengers = adults + children + infants;
 

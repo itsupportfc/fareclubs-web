@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import useFlightStore from "../../store/useFlightStore";
 import FareQuoteOverlay from "../common/FareQuoteOverlay";
 import { useTripConfig } from "../../hooks/useTripConfig";
-
+import { useShallow } from "zustand/react/shallow";
 export default function ReturnFareModal({
     outboundFlight,
     returnFlight,
@@ -16,7 +16,15 @@ export default function ReturnFareModal({
     isInternationalReturn = false,
 }) {
     const navigate = useNavigate();
-    const { adults, children, infants, setCache, getCache } = useFlightStore();
+    const { adults, children, infants, setCache, getCache } = useFlightStore(
+        useShallow((s) => ({
+            adults: s.adults,
+            children: s.children,
+            infants: s.infants,
+            setCache: s.setCache,
+            getCache: s.getCache,
+        })),
+    );
 
     const farePassengers = adults + children;
     const tripConfig = useTripConfig({
