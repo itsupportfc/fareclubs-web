@@ -87,8 +87,15 @@ const useFlightStore = create((set, get) => ({
     // 🗄️ Cache (persisted)
     flightCache: loadCache(),
 
+    // caching
+    _lastQueryKey: null, // internal use to track if current search params match cached results
+    _searchAbortController: null,
+
+    // Timer for session => set on search and for 15 mins
+    searchTimestamp: null,
+
     // ===============================
-    // 🔸 Setters
+    //  Setters
     // ===============================
     setOrigin: (origin) => set({ origin }),
     setDestination: (destination) => set({ destination }),
@@ -198,11 +205,37 @@ const useFlightStore = create((set, get) => ({
     // ===============================
     searchFlights: async () => {
         const state = get();
+
+        // Build fingerprint FIRST, before any state changes
+        const queryKey = JSON.stringify({
+            origin: state.origin.trim().toUpperCase(),
+            destination: state.destination.trim().toUpperCase(),
+            dep: state.departDate,
+            ret: state.tripType === "roundtrip" ? state.returnDate : null,
+            adults: state.adults,
+            children: state.children,
+            infants: state.infants,
+            class: state.travelClass?.toLowerCase(),
+            trip: state.tripType,
+        });
+
+        // Cache hit — same params and results already loaded — skip the API
+        if (
+            state._lastQueryKey === queryKey &&
+            state.outboundFlights.length > 0
+        ) {
+            return true;
+        }
+
+        // Only now clear flights and set loading
+        if (state._searchAbortController) state._searchAbortController.abort();
+        const controller = new AbortController();
         set({
             isLoading: true,
             error: null,
             outboundFlights: [],
             inboundFlights: [],
+            _searchAbortController: controller,
         });
 
         try {
@@ -223,7 +256,7 @@ const useFlightStore = create((set, get) => ({
                 preferredAirlines: [],
             };
 
-            const data = await searchFlightsAPI(payload);
+            const data = await searchFlightsAPI(payload, controller.signal);
 
             const outboundFlights = Array.isArray(data?.outboundFlights)
                 ? data.outboundFlights
@@ -242,6 +275,9 @@ const useFlightStore = create((set, get) => ({
                 priceRange,
                 isInternationalReturn: data?.isInternationalReturn || false,
                 isLoading: false,
+                _lastQueryKey: queryKey, // save fingerprint for cache hit check
+                _searchAbortController: null, // clear abort controller after successful response
+                searchTimestamp: Date.now(), // session starts now
                 error:
                     outboundFlights.length === 0 && inboundFlights.length === 0
                         ? "No flights found"
@@ -263,13 +299,14 @@ const useFlightStore = create((set, get) => ({
 
             return outboundFlights.length > 0 || inboundFlights.length > 0;
         } catch (err) {
+            if (err.name === "AbortError") return false; // aborted requests are not errors, just ignore
             set({
                 outboundFlights: [],
                 inboundFlights: [],
                 isLoading: false,
                 error: err.message || "Failed to search flights",
+                _searchAbortController: null,
             });
-            console.error("Search Flights Error:", err);
             return false;
         }
     },
@@ -394,6 +431,9 @@ const useFlightStore = create((set, get) => ({
             selectedInbound: null,
             fareSnapshot: null,
             bookingStep: "results",
+            _lastQueryKey: null,
+            _searchAbortController: null,
+            searchTimestamp: null,
         });
     },
 }));

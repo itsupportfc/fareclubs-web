@@ -19,7 +19,9 @@
       "WebFetch(domain:medium.com)",
       "WebFetch(domain:www.geeksforgeeks.org)",
       "WebFetch(domain:istywhyerlina.medium.com)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "Bash(du -sh \"/d/CSE/Fareclubs/Projects/fareclubs-web/backend/static/\"*)",
+      "Bash(find:*)"
     ]
   }
 }

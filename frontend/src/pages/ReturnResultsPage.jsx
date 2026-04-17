@@ -4,10 +4,11 @@ import useFlightStore from "../store/useFlightStore";
 import Navbar from "../components/Home/Navbar";
 import SmallSearch from "../components/search/SmallSearch";
 import Sidebar from "../components/search/Sidebar";
-import LoaderOverlay from "../components/common/LoaderOverlay";
 import ReturnFareModal from "../components/search/ReturnFareModal";
+import FlightSearchLoader from "../components/common/FlightSearchLoader";
 import { useTripConfig } from "../hooks/useTripConfig";
 import { filterFlights } from "../utils/flightFilters";
+import { useShallow } from "zustand/react/shallow";
 
 /* ================= HELPERS ================= */
 const getLowestFare = (flight) =>
@@ -40,11 +41,9 @@ const getReturnLegs = (flight) => getLowestFare(flight)?.segments?.[1] || [];
 
 /* ================= PAGE ================= */
 export default function ReturnResultsPage() {
-    const flightStore = useFlightStore();
-
     const {
-        outboundFlights = [],
-        inboundFlights = [],
+        outboundFlights,
+        inboundFlights,
         adults,
         children,
         infants,
@@ -52,8 +51,21 @@ export default function ReturnResultsPage() {
         isInternationalReturn,
         getSelectedFlight,
         setSelectedFlight,
-        filters = {},
-    } = flightStore;
+        filters,
+    } = useFlightStore(
+        useShallow((s) => ({
+            outboundFlights: s.outboundFlights,
+            inboundFlights: s.inboundFlights,
+            adults: s.adults,
+            children: s.children,
+            infants: s.infants,
+            isLoading: s.isLoading,
+            isInternationalReturn: s.isInternationalReturn,
+            getSelectedFlight: s.getSelectedFlight,
+            setSelectedFlight: s.setSelectedFlight,
+            filters: s.filters,
+        })),
+    );
 
     const farePassengers = adults + children;
 
@@ -182,8 +194,6 @@ export default function ReturnResultsPage() {
         return tripConfig.getDisplayPrice(selectedOutbound, selectedInbound);
     }, [selectedOutbound, selectedInbound, tripConfig]);
 
-    if (isLoading) return <LoaderOverlay />;
-
     return (
         <div className="min-h-screen bg-gray-50 mt-16 pb-40">
             <Navbar />
@@ -206,40 +216,50 @@ export default function ReturnResultsPage() {
                 </div>
 
                 {tripConfig.hasSeparateLists ? (
-                    <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <FlightColumn
-                            title="Departure"
-                            flights={filteredOutboundFlights}
-                            selected={selectedOutbound}
-                            onSelect={setSelectedOutbound}
-                            onDetails={setDetailsFlight}
-                        />
-                        <FlightColumn
-                            title="Return"
-                            flights={filteredInboundFlights}
-                            selected={selectedInbound}
-                            onSelect={setSelectedInbound}
-                            onDetails={setDetailsFlight}
-                        />
+                    <div className="flex-1">
+                        {isLoading ? (
+                            <FlightSearchLoader columns={2} />
+                        ) : (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <FlightColumn
+                                    title="Departure"
+                                    flights={filteredOutboundFlights}
+                                    selected={selectedOutbound}
+                                    onSelect={setSelectedOutbound}
+                                    onDetails={setDetailsFlight}
+                                />
+                                <FlightColumn
+                                    title="Return"
+                                    flights={filteredInboundFlights}
+                                    selected={selectedInbound}
+                                    onSelect={setSelectedInbound}
+                                    onDetails={setDetailsFlight}
+                                />
+                            </div>
+                        )}
                     </div>
                 ) : (
                     <div className="flex-1">
                         <h2 className="font-display text-xl mb-4">
                             Round-trip Flights
                         </h2>
-                        <div>
-                            {filteredOutboundFlights.map((f) => (
-                                <InternationalFlightCard
-                                    key={f.groupId}
-                                    flight={f}
-                                    isSelected={
-                                        selectedOutbound?.groupId === f.groupId
-                                    }
-                                    onSelect={handleInternationalSelect}
-                                    onShowDetails={setDetailsFlight}
-                                />
-                            ))}
-                        </div>
+                        {isLoading ? (
+                            <FlightSearchLoader />
+                        ) : (
+                            <div>
+                                {filteredOutboundFlights.map((f) => (
+                                    <InternationalFlightCard
+                                        key={f.groupId}
+                                        flight={f}
+                                        isSelected={
+                                            selectedOutbound?.groupId === f.groupId
+                                        }
+                                        onSelect={handleInternationalSelect}
+                                        onShowDetails={setDetailsFlight}
+                                    />
+                                ))}
+                            </div>
+                        )}
                     </div>
                 )}
             </div>

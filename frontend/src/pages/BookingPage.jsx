@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, Navigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import Navbar from "../components/Home/Navbar";
 import { getSSRAPI } from "../components/api/flight";
@@ -31,6 +31,8 @@ import FareSummary from "../components/booking/FareSummary";
 import SSRModal from "../components/booking/SSRModal";
 import BookingProcessingOverlay from "../components/common/BookingProcessingOverlay";
 import { useTripConfig } from "../hooks/useTripConfig";
+import { useSessionCountdown } from "../hooks/useSessionCountdown";
+import useFlightStore from "../store/useFlightStore";
 
 const sectionVariants = {
     hidden: { opacity: 0, y: 20 },
@@ -84,9 +86,20 @@ export default function BookingPage() {
     const [bookingError, setBookingError] = useState(null);
     const [ssrLoading, setSsrLoading] = useState(false);
 
+    const searchTimestamp = useFlightStore((s) => s.searchTimestamp);
+    // calculate remaining session time
+    const secondsLeft = useSessionCountdown(searchTimestamp);
+    const sessionExpired = secondsLeft === 0;
+    const showSessionWarning = secondsLeft > 0 && secondsLeft <= 13 * 60; // last 5 minutes
+
     const token = localStorage.getItem("access_token");
     const { initiateBooking, isProcessing, processingStep } =
         useRazorpayBooking(token);
+
+    // Route Guard - must be after all the hooks
+    if (!outboundFlight || !outboundSelectedFare) {
+        return <Navigate to="/" replace />;
+    }
 
     /* --- SSR subtotals --- */
     const seatTotal = useMemo(
@@ -132,220 +145,235 @@ export default function BookingPage() {
     };
 
     /* --- Validation --- */
-   const calculateAge = (dateOfBirth) => {
-    if (!dateOfBirth) return null;
+    const calculateAge = (dateOfBirth) => {
+        if (!dateOfBirth) return null;
 
-    const today = new Date();
-    const dob = new Date(dateOfBirth);
+        const today = new Date();
+        const dob = new Date(dateOfBirth);
 
-    if (Number.isNaN(dob.getTime())) return null;
+        if (Number.isNaN(dob.getTime())) return null;
 
-    let age = today.getFullYear() - dob.getFullYear();
-    const monthDiff = today.getMonth() - dob.getMonth();
-    const dayDiff = today.getDate() - dob.getDate();
+        let age = today.getFullYear() - dob.getFullYear();
+        const monthDiff = today.getMonth() - dob.getMonth();
+        const dayDiff = today.getDate() - dob.getDate();
 
-    if (monthDiff < 0 || (monthDiff === 0 && dayDiff < 0)) {
-        age--;
-    }
+        if (monthDiff < 0 || (monthDiff === 0 && dayDiff < 0)) {
+            age--;
+        }
 
-    return age;
-};
+        return age;
+    };
 
-const travellersValidation = useMemo(() => {
-    const errors = [];
+    const travellersValidation = useMemo(() => {
+        const errors = [];
 
-    if (!travellers.length) {
-        return {
-            isValid: false,
-            errors: [],
-        };
-    }
+        if (!travellers.length) {
+            return {
+                isValid: false,
+                errors: [],
+            };
+        }
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
 
-    travellers.forEach((t, index) => {
-        const travellerErrors = {};
+        travellers.forEach((t, index) => {
+            const travellerErrors = {};
 
-        // Basic required fields
-        if (!t.title) travellerErrors.title = "Title is required";
-        if (!t.firstName?.trim())
-            travellerErrors.firstName = "First name is required";
-        if (!t.lastName?.trim())
-            travellerErrors.lastName = "Last name is required";
-        if (!t.gender) travellerErrors.gender = "Gender is required";
+            // Basic required fields
+            if (!t.title) travellerErrors.title = "Title is required";
+            if (!t.firstName?.trim())
+                travellerErrors.firstName = "First name is required";
+            if (!t.lastName?.trim())
+                travellerErrors.lastName = "Last name is required";
+            if (!t.gender) travellerErrors.gender = "Gender is required";
 
-        // DOB validation
-        if (!t.dateOfBirth) {
-            travellerErrors.dateOfBirth = "Date of birth is required";
-        } else {
-            const dob = new Date(t.dateOfBirth);
-
-            if (Number.isNaN(dob.getTime())) {
-                travellerErrors.dateOfBirth = "Invalid date of birth";
+            // DOB validation
+            if (!t.dateOfBirth) {
+                travellerErrors.dateOfBirth = "Date of birth is required";
             } else {
-                dob.setHours(0, 0, 0, 0);
+                const dob = new Date(t.dateOfBirth);
 
-                if (dob > today) {
-                    travellerErrors.dateOfBirth =
-                        "Date of birth cannot be in the future";
+                if (Number.isNaN(dob.getTime())) {
+                    travellerErrors.dateOfBirth = "Invalid date of birth";
                 } else {
-                    const age = calculateAge(t.dateOfBirth);
+                    dob.setHours(0, 0, 0, 0);
 
-                    if (t.type === "Adult" && age < 12) {
+                    if (dob > today) {
                         travellerErrors.dateOfBirth =
-                            "Adult must be at least 12 years old";
-                    }
+                            "Date of birth cannot be in the future";
+                    } else {
+                        const age = calculateAge(t.dateOfBirth);
 
-                    if (t.type === "Infant" && age >= 2) {
-                        travellerErrors.dateOfBirth =
-                            "Infant cannot be more than 2 years old";
+                        if (t.type === "Adult" && age < 12) {
+                            travellerErrors.dateOfBirth =
+                                "Adult must be at least 12 years old";
+                        }
+
+                        if (t.type === "Infant" && age >= 2) {
+                            travellerErrors.dateOfBirth =
+                                "Infant cannot be more than 2 years old";
+                        }
                     }
                 }
             }
-        }
 
-        // Lead traveller validation
-        if (index === 0) {
-            if (!t.email?.trim()) {
-                travellerErrors.email = "Email is required";
-            } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(t.email)) {
-                travellerErrors.email = "Invalid email address";
+            // Lead traveller validation
+            if (index === 0) {
+                if (!t.email?.trim()) {
+                    travellerErrors.email = "Email is required";
+                } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(t.email)) {
+                    travellerErrors.email = "Invalid email address";
+                }
+
+                if (!t.contactNo?.trim()) {
+                    travellerErrors.contactNo = "Contact number is required";
+                } else if (!/^\d{10}$/.test(t.contactNo)) {
+                    travellerErrors.contactNo =
+                        "Contact number must be 10 digits";
+                }
             }
 
-            if (!t.contactNo?.trim()) {
-                travellerErrors.contactNo = "Contact number is required";
-            } else if (!/^\d{10}$/.test(t.contactNo)) {
-                travellerErrors.contactNo =
-                    "Contact number must be 10 digits";
-            }
-        }
-
-        // PAN validation
-        if (fareQuoteFlags?.isPanRequired) {
-            if (!t.pan?.trim()) {
-                travellerErrors.pan = "PAN is required";
-            }
-        }
-
-        // Passport validation
-        if (fareQuoteFlags?.isPassportRequired) {
-            if (!t.passportNo?.trim()) {
-                travellerErrors.passportNo = "Passport number is required";
+            // PAN validation
+            if (fareQuoteFlags?.isPanRequired) {
+                if (!t.pan?.trim()) {
+                    travellerErrors.pan = "PAN is required";
+                }
             }
 
-            if (!t.passportExpiry) {
-                travellerErrors.passportExpiry =
-                    "Passport expiry is required";
-            } else {
-                const expiry = new Date(t.passportExpiry);
+            // Passport validation
+            if (fareQuoteFlags?.isPassportRequired) {
+                if (!t.passportNo?.trim()) {
+                    travellerErrors.passportNo = "Passport number is required";
+                }
 
-                if (Number.isNaN(expiry.getTime())) {
+                if (!t.passportExpiry) {
                     travellerErrors.passportExpiry =
-                        "Invalid passport expiry date";
+                        "Passport expiry is required";
                 } else {
-                    expiry.setHours(0, 0, 0, 0);
-                    if (expiry <= today) {
+                    const expiry = new Date(t.passportExpiry);
+                    if (Number.isNaN(expiry.getTime())) {
                         travellerErrors.passportExpiry =
-                            "Passport expiry must be a future date";
+                            "Invalid passport expiry date";
+                    } else {
+                        expiry.setHours(0, 0, 0, 0);
+                        if (expiry <= today) {
+                            travellerErrors.passportExpiry =
+                                "Passport expiry must be a future date";
+                        } else {
+                            // // International travel rule: passport must be valid 6 months past departure
+                            const departureDate = new Date(
+                                outboundFlight?.departureTime,
+                            );
+                            const sixMonthsLater = new Date(departureDate);
+                            sixMonthsLater.setMonth(
+                                sixMonthsLater.getMonth() + 6,
+                            );
+                            sixMonthsLater.setHours(0, 0, 0, 0);
+                            if (expiry < sixMonthsLater) {
+                                travellerErrors.passportExpiry =
+                                    "Passport must be valid for at least 6 months from departure date";
+                            }
+                        }
+                    }
+                }
+
+                if (fareQuoteFlags?.isPassportFullDetailRequired) {
+                    if (!t.passportIssueDate) {
+                        travellerErrors.passportIssueDate =
+                            "Passport issue date is required";
+                    }
+                    if (!t.passportIssueCountryCode?.trim()) {
+                        travellerErrors.passportIssueCountryCode =
+                            "Passport issue country is required";
                     }
                 }
             }
 
-            if (fareQuoteFlags?.isPassportFullDetailRequired) {
-                if (!t.passportIssueDate) {
-                    travellerErrors.passportIssueDate =
-                        "Passport issue date is required";
-                }
-                if (!t.passportIssueCountryCode?.trim()) {
-                    travellerErrors.passportIssueCountryCode =
-                        "Passport issue country is required";
-                }
-            }
+            errors[index] = travellerErrors;
+        });
+
+        const isValid = errors.every(
+            (travellerErrors) =>
+                Object.keys(travellerErrors || {}).length === 0,
+        );
+
+        return {
+            isValid,
+            errors,
+        };
+    }, [travellers, fareQuoteFlags]);
+
+    const travellersComplete = travellersValidation.isValid;
+
+    /* --- Init travellers --- */
+    useEffect(() => {
+        if (!passengers) return;
+
+        const list = [];
+        const extraFields = {
+            pan: "",
+            passportNo: "",
+            passportExpiry: "",
+            passportIssueDate: "",
+            passportIssueCountryCode: "",
+        };
+
+        for (let i = 0; i < passengers.adults; i++) {
+            list.push({
+                title: "",
+                firstName: "",
+                lastName: "",
+                dateOfBirth: "",
+                gender: "",
+                type: "Adult",
+                email: "",
+                contactNo: "",
+                addressLine1: "",
+                city: "",
+                nationality: "IN",
+                ...extraFields,
+                ...(i === 0
+                    ? {
+                          gstCompanyName: "",
+                          gstNumber: "",
+                          gstCompanyAddress: "",
+                          gstCompanyEmail: "",
+                          gstCompanyPhone: "",
+                      }
+                    : {}),
+            });
         }
 
-        errors[index] = travellerErrors;
-    });
+        for (let i = 0; i < passengers.children; i++) {
+            list.push({
+                title: "",
+                firstName: "",
+                lastName: "",
+                dateOfBirth: "",
+                gender: "",
+                type: "Child",
+                nationality: "IN",
+                ...extraFields,
+            });
+        }
 
-    const isValid = errors.every(
-        (travellerErrors) => Object.keys(travellerErrors || {}).length === 0,
-    );
+        for (let i = 0; i < passengers.infants; i++) {
+            list.push({
+                title: "",
+                firstName: "",
+                lastName: "",
+                dateOfBirth: "",
+                gender: "",
+                type: "Infant",
+                nationality: "IN",
+                ...extraFields,
+            });
+        }
 
-    return {
-        isValid,
-        errors,
-    };
-}, [travellers, fareQuoteFlags]);
+        setTravellers(list);
+    }, [passengers]);
 
-const travellersComplete = travellersValidation.isValid;
-
-/* --- Init travellers --- */
-useEffect(() => {
-    if (!passengers) return;
-
-    const list = [];
-    const extraFields = {
-        pan: "",
-        passportNo: "",
-        passportExpiry: "",
-        passportIssueDate: "",
-        passportIssueCountryCode: "",
-    };
-
-    for (let i = 0; i < passengers.adults; i++) {
-        list.push({
-            title: "",
-            firstName: "",
-            lastName: "",
-            dateOfBirth: "",
-            gender: "",
-            type: "Adult",
-            email: "",
-            contactNo: "",
-            addressLine1: "",
-            city: "",
-            nationality: "IN",
-            ...extraFields,
-            ...(i === 0
-                ? {
-                      gstCompanyName: "",
-                      gstNumber: "",
-                      gstCompanyAddress: "",
-                      gstCompanyEmail: "",
-                      gstCompanyPhone: "",
-                  }
-                : {}),
-        });
-    }
-
-    for (let i = 0; i < passengers.children; i++) {
-        list.push({
-            title: "",
-            firstName: "",
-            lastName: "",
-            dateOfBirth: "",
-            gender: "",
-            type: "Child",
-            nationality: "IN",
-            ...extraFields,
-        });
-    }
-
-    for (let i = 0; i < passengers.infants; i++) {
-        list.push({
-            title: "",
-            firstName: "",
-            lastName: "",
-            dateOfBirth: "",
-            gender: "",
-            type: "Infant",
-            nationality: "IN",
-            ...extraFields,
-        });
-    }
-
-    setTravellers(list);
-}, [passengers]);
     /* --- SSR prefetch on mount --- */
     useEffect(() => {
         if (!outboundSelectedFare?.fareId) return;
@@ -404,7 +432,16 @@ useEffect(() => {
                         if (!outSegCount) return null;
                         const segs = [];
                         for (let s = 0; s < outSegCount; s++) {
-                            segs.push(buildSsr(i, "outbound", s, selectedSeats, selectedMeals, selectedBag));
+                            segs.push(
+                                buildSsr(
+                                    i,
+                                    "outbound",
+                                    s,
+                                    selectedSeats,
+                                    selectedMeals,
+                                    selectedBag,
+                                ),
+                            );
                         }
                         return segs.some(Boolean) ? segs : null;
                     })();
@@ -414,7 +451,16 @@ useEffect(() => {
                         if (!isRoundtrip || !inSegCount) return null;
                         const segs = [];
                         for (let s = 0; s < inSegCount; s++) {
-                            segs.push(buildSsr(i, "inbound", s, selectedSeats, selectedMeals, selectedBag));
+                            segs.push(
+                                buildSsr(
+                                    i,
+                                    "inbound",
+                                    s,
+                                    selectedSeats,
+                                    selectedMeals,
+                                    selectedBag,
+                                ),
+                            );
                         }
                         return segs.some(Boolean) ? segs : null;
                     })();
@@ -508,8 +554,6 @@ useEffect(() => {
             (err) => setBookingError(err),
         );
     };
-console.log("travellers", travellers);
-console.log("travellersValidation", travellersValidation);
     return (
         <div className="min-h-screen bg-gray-50">
             <BookingProcessingOverlay
@@ -758,17 +802,76 @@ console.log("travellersValidation", travellersValidation);
                                 </div>
                             </div>
 
+                            {/* Session countdown warning - last 5 minutes */}
+                            {showSessionWarning && (
+                                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm mb-4">
+                                    <div className="flex items-start gap-2">
+                                        <span className="text-amber-500 mt-0.5">
+                                            &#9201;
+                                        </span>
+                                        <div>
+                                            <p className="font-semibold text-amber-800">
+                                                Session expires in{" "}
+                                                {Math.floor(secondsLeft / 60)}:
+                                                {String(
+                                                    secondsLeft % 60,
+                                                ).padStart(2, "0")}
+                                            </p>
+                                            <p className="text-amber-700 mt-0.5">
+                                                Please complete your booking
+                                                soon.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Session expired — search again */}
+                            {sessionExpired && (
+                                <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm mb-4">
+                                    <div className="flex items-start gap-2">
+                                        <span className="text-red-500 mt-0.5">
+                                            &#9888;
+                                        </span>
+                                        <div>
+                                            <p className="font-semibold text-red-800">
+                                                Session expired
+                                            </p>
+                                            <p className="text-red-700 mt-0.5">
+                                                Your search session has timed
+                                                out. Please search again to get
+                                                updated fares.
+                                            </p>
+                                            <button
+                                                onClick={() => navigate("/")}
+                                                className="mt-2 px-4 py-1.5 bg-red-600 text-white text-xs font-semibold rounded-lg hover:bg-red-700 transition"
+                                            >
+                                                Search Again
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
                             <button
-                                disabled={!travellersComplete}
+                                disabled={
+                                    !travellersComplete ||
+                                    isProcessing ||
+                                    sessionExpired
+                                } // idempotency guard
                                 onClick={handlePay}
                                 className={`w-full py-3.5 rounded-xl font-bold text-base transition-all duration-200 flex items-center justify-center gap-2 ${
-                                    travellersComplete
+                                    travellersComplete &&
+                                    !isProcessing &&
+                                    !sessionExpired
                                         ? "bg-gradient-to-r from-[#FF2E57] to-[#FF6B35] text-white hover:shadow-lg hover:shadow-[#FF2E57]/25 active:scale-[0.98]"
                                         : "bg-gray-200 text-gray-400 cursor-not-allowed"
                                 }`}
                             >
                                 <CreditCard className="w-5 h-5" />
-                                Pay ₹{currencyFmt(grandTotal)} &amp; Book
+                                {isProcessing
+                                    ? "Processing..."
+                                    : `Pay ₹${currencyFmt(grandTotal)} & Book`}
                             </button>
 
                             {bookingError && (
@@ -816,15 +919,21 @@ console.log("travellersValidation", travellersValidation);
                         </p>
                     </div>
                     <button
-                        disabled={!travellersComplete}
+                        disabled={
+                            !travellersComplete ||
+                            isProcessing ||
+                            sessionExpired
+                        } // idempotency guard
                         onClick={handlePay}
                         className={`px-6 py-2.5 rounded-xl font-bold text-sm ${
-                            travellersComplete
+                            travellersComplete &&
+                            !isProcessing &&
+                            !sessionExpired
                                 ? "bg-gradient-to-r from-[#FF2E57] to-[#FF6B35] text-white"
                                 : "bg-gray-200 text-gray-400"
                         }`}
                     >
-                        Pay &amp; Book
+                        {isProcessing ? "Processing..." : "Pay & Book"}
                     </button>
                 </div>
             </div>
