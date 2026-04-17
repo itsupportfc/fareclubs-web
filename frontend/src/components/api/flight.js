@@ -92,7 +92,6 @@ export async function getFareRulesAPI({ fareId, signal }) {
 
     return data;
 }
-  
 
 export async function getSSRAPI(payload, signal) {
     // Basic validation

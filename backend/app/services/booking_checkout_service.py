@@ -127,7 +127,7 @@ class BookingCheckoutService:
             payload.fare_id_outbound,
             payload.fare_id_inbound,
         )
-        # check cache => validate payment amount => return Razorpay order details 
+        # check cache => validate payment amount => return Razorpay order details
         await self._require_cached_fare(payload.fare_id_outbound)
         verified_total_amount = await self._compute_verified_total_amount(
             fare_id_outbound=payload.fare_id_outbound,
@@ -278,15 +278,15 @@ class BookingCheckoutService:
     async def _build_leg_work_items(
         self,
         payload: BookingConfirmRequest,
-        outbound_cached_fare: dict, # why only this is required? 
+        outbound_cached_fare: dict,  # why only this is required?
     ) -> list[LegWorkItem]:
         # outbound_cached_fare == provider_ref dict of this fare_id
         outbound_is_lcc = outbound_cached_fare.get("IsLCC", False)
         outbound_raw_ssr = await self.cache.get_model(
             f"raw_ssr_{payload.fare_id_outbound}", TBOSSRResponse
-        ) 
+        )
         # checking that SSR options exist in cache?
-        # why only for lcc? 
+        # why only for lcc?
         if outbound_is_lcc and not outbound_raw_ssr:
             raise HTTPException(
                 status_code=status.HTTP_410_GONE,
@@ -496,13 +496,17 @@ class BookingCheckoutService:
                 parse_error_raw=parse_error_raw,
             )
         except Exception as persist_error:
-            logger.error(
-                "Failed to persist %s leg: %s\n%s",
+            logger.critical(
+                "TICKET ISSUED BUT NOT SAVED — %s leg: provider_raw exists=%s, error=%s\n%s",
                 result.direction.value,
+                result.provider_raw is not None,
                 persist_error,
                 traceback.format_exc(),
             )
-            if result.succeeded:
+            # DO NOT overwrite result.error when the ticket was successfully issued.
+            # The customer must see "confirmed" because the airline DID confirm it.
+            # The persist failure is an internal issue that staff must resolve manually.
+            if not result.succeeded:
                 result.error = persist_error
 
     def _build_final_response(
@@ -775,7 +779,14 @@ class BookingCheckoutService:
     ) -> None:
         submitted = round(client_total_amount, 2)
         expected = round(verified_total_amount, 2)
-        if submitted < expected - 1.0:
+        # Allow max 1 paise difference (floating-point rounding tolerance only)
+        if abs(submitted - expected) > 0.01:
+            logger.warning(
+                "Amount mismatch: submitted=%.2f, expected=%.2f, diff=%.2f",
+                submitted,
+                expected,
+                submitted - expected,
+            )
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=(
