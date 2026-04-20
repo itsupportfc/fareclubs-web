@@ -74,15 +74,3 @@ app.include_router(flight.router, prefix="/api/v1")
 app.include_router(flight_booking.router, prefix="/api/v1")
 app.include_router(airports.router, prefix="/api/v1")
 
-
-@app.get("/dev/cache-inspect")
-async def inspect_cache(cache: FlightCache = Depends(get_flight_cache)):
-    try:
-        keys = await cache._redis.keys("*")
-        data = {}
-        for k in keys:
-            raw = await cache._redis.get(k)
-            data[k] = raw[:200] if raw else None
-        return {"count": len(keys), "keys": keys, "data": data}
-    except Exception as e:
-        return {"error": str(e)}
