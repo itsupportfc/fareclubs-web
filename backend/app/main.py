@@ -110,3 +110,4 @@ app.include_router(auth.router, prefix="/api/v1")
 app.include_router(flight.router, prefix="/api/v1")
 app.include_router(flight_booking.router, prefix="/api/v1")
 app.include_router(airports.router, prefix="/api/v1")
+
