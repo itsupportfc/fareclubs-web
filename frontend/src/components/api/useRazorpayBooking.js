@@ -35,6 +35,17 @@ export function useRazorpayBooking(token) {
 
             let orderData;
             try {
+                const ssrSelectionsOutbound =
+                    bookingPayload.passengers?.flatMap(
+                        (p) => p.ssrSegmentsOutbound ?? [],
+                    ) ?? null;
+
+                const ssrSelectionsInbound = bookingPayload.fareIdInbound
+                    ? bookingPayload.passengers?.flatMap(
+                          (p) => p.ssrSegmentsInbound ?? [],
+                      ) ?? null
+                    : null;
+
                 const createOrderPayload = {
                     fareIdOutbound: bookingPayload.fareIdOutbound,
                     fareIdInbound: bookingPayload.fareIdInbound ?? null,
@@ -42,6 +53,8 @@ export function useRazorpayBooking(token) {
                     isInternationalReturn:
                         bookingPayload.isInternationalReturn ?? false,
                     clientTotalAmount: bookingPayload.totalAmount,
+                    ssrSelectionsOutbound,
+                    ssrSelectionsInbound,
                 };
 
                 setProcessingStep(1);

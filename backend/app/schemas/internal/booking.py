@@ -104,6 +104,12 @@ class BookingCreateOrderRequest(InternalBaseSchema):
     is_international_return: bool = False
     client_total_amount: float
 
+    # Flattened across passengers × segments (order doesn't matter — we just
+    # sum prices). Backend uses these + cached raw_ssr to recompute SSR prices
+    # server-side so the Razorpay order amount equals fare + tax + SSR.
+    ssr_selections_outbound: list[SsrSelection | None] | None = None
+    ssr_selections_inbound: list[SsrSelection | None] | None = None
+
 
 class BookingCreateOrderResponse(InternalBaseSchema):
     """Explicit payment naming so frontend never confuses payment/order IDs."""

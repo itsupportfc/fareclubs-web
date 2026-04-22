@@ -93,7 +93,7 @@ async def unhandled_exception_handler(request, exc: Exception):
         "Unhandled exception [request_id=%s] %s %s",
         request_id,
         request.method,
-        request.utl.path,
+        request.url.path,
     )
     # The client gets a user-friendly message + a `request_id` they can share with support
     # You search your logs for that `request_id` to find the exact stack trace

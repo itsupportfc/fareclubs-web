@@ -36,6 +36,7 @@ from app.schemas.internal.booking import (
     BookingConfirmResponse,
     BookingCreateOrderRequest,
     BookingCreateOrderResponse,
+    SsrSelection,
 )
 from app.schemas.tbo import (
     TBOGetBookingDetailsResponse,
@@ -132,6 +133,9 @@ class BookingCheckoutService:
         verified_total_amount = await self._compute_verified_total_amount(
             fare_id_outbound=payload.fare_id_outbound,
             fare_id_inbound=payload.fare_id_inbound,
+            ssr_selections_outbound=payload.ssr_selections_outbound,
+            ssr_selections_inbound=payload.ssr_selections_inbound,
+            is_international_return=payload.is_international_return,
         )
         self._validate_client_total_amount(
             client_total_amount=payload.client_total_amount,
@@ -174,11 +178,26 @@ class BookingCheckoutService:
             payload.fare_id_outbound,
             payload.fare_id_inbound,
         )
-        # why confirming the amount again?
+        # Defense-in-depth: re-verify even though Razorpay already enforced the
+        # order amount — catches a tampered confirm payload or a fare-cache
+        # rotation between order and confirm.
         outbound_cached_fare = await self._require_cached_fare(payload.fare_id_outbound)
+        ssr_outbound = [
+            sel
+            for p in payload.passengers
+            for sel in (p.ssr_segments_outbound or [])
+        ]
+        ssr_inbound = [
+            sel
+            for p in payload.passengers
+            for sel in (p.ssr_segments_inbound or [])
+        ]
         verified_total_amount = await self._compute_verified_total_amount(
             fare_id_outbound=payload.fare_id_outbound,
             fare_id_inbound=payload.fare_id_inbound,
+            ssr_selections_outbound=ssr_outbound,
+            ssr_selections_inbound=ssr_inbound,
+            is_international_return=payload.is_international_return,
         )
         self._validate_client_total_amount(
             client_total_amount=payload.client_total_amount,
@@ -742,11 +761,109 @@ class BookingCheckoutService:
             )
         return cached_fare
 
+    def _compute_ssr_total_for_direction(
+        self,
+        *,
+        raw_ssr: TBOSSRResponse | None,
+        selections: list["SsrSelection | None"] | None,
+        leg_index: int,
+        is_international_return: bool,
+    ) -> float:
+        """Sum the price of all SSR codes selected for one direction.
+
+        `selections` is a flat list (already flattened across passengers and
+        segments — order doesn't matter for summation).
+
+        - Domestic round-trip: each direction has its own raw_ssr cache, `leg_index=0`.
+        - International round-trip: both directions share the outbound raw_ssr cache;
+          `leg_index=0` reads outbound blocks, `leg_index=1` reads inbound blocks.
+
+        Missing codes (stale cache, code typo) are logged and skipped — we never
+        raise from here, because letting a single mismatched code 500 the whole
+        checkout would be worse than overcharging by ₹0.
+        """
+        if not selections or not raw_ssr or not raw_ssr.Response:
+            return 0.0
+
+        response = raw_ssr.Response
+
+        def _pick_blocks(blocks):
+            if blocks is None:
+                return []
+            if is_international_return:
+                return [blocks[leg_index]] if leg_index < len(blocks) else []
+            return list(blocks)
+
+        seat_price_by_code: dict[str, float] = {}
+        for sd in _pick_blocks(response.SeatDynamic):
+            if not sd or not sd.SegmentSeat:
+                continue
+            for seg in sd.SegmentSeat:
+                if not seg.RowSeats:
+                    continue
+                for row in seg.RowSeats:
+                    for seat in row.Seats or []:
+                        if seat.Code and seat.Code != "NoSeat":
+                            seat_price_by_code[seat.Code] = float(seat.Price or 0)
+
+        baggage_price_by_code: dict[str, float] = {}
+        for block in _pick_blocks(response.Baggage):
+            for b in block or []:
+                if b.Code:
+                    baggage_price_by_code[b.Code] = float(b.Price or 0)
+
+        # MealDynamic = LCC priced meals. Non-LCC `Meal` (SimpleMeal) has no
+        # Price field, so non-LCC meals cost ₹0 and are not added.
+        meal_price_by_code: dict[str, float] = {}
+        for block in _pick_blocks(response.MealDynamic):
+            for m in block or []:
+                if m.Code:
+                    meal_price_by_code[m.Code] = float(m.Price or 0)
+
+        total = 0.0
+        for sel in selections:
+            if sel is None:
+                continue
+            if sel.meal_code:
+                price = meal_price_by_code.get(sel.meal_code)
+                if price is None:
+                    logger.warning(
+                        "SSR pricing: meal_code=%s not found in cached SSR (leg_index=%d) — skipping",
+                        sel.meal_code,
+                        leg_index,
+                    )
+                else:
+                    total += price
+            if sel.baggage_code:
+                price = baggage_price_by_code.get(sel.baggage_code)
+                if price is None:
+                    logger.warning(
+                        "SSR pricing: baggage_code=%s not found in cached SSR (leg_index=%d) — skipping",
+                        sel.baggage_code,
+                        leg_index,
+                    )
+                else:
+                    total += price
+            if sel.seat_code:
+                price = seat_price_by_code.get(sel.seat_code)
+                if price is None:
+                    logger.warning(
+                        "SSR pricing: seat_code=%s not found in cached SSR (leg_index=%d) — skipping",
+                        sel.seat_code,
+                        leg_index,
+                    )
+                else:
+                    total += price
+        return total
+
     async def _compute_verified_total_amount(
         self,
         *,
         fare_id_outbound: str,
         fare_id_inbound: str | None,
+        ssr_selections_outbound: list["SsrSelection | None"] | None = None,
+        ssr_selections_inbound: list["SsrSelection | None"] | None = None,
+        is_international_return: bool = False,
     ) -> float:
         # we set this during FareQuote response processing
         verified_outbound_amount = await self.cache.get(
@@ -769,6 +886,59 @@ class BookingCheckoutService:
                     detail="Inbound fare quote must be completed before checkout.",
                 )
             verified_total_amount += float(verified_inbound_amount)
+
+        has_outbound_ssr = bool(ssr_selections_outbound) and any(
+            s is not None for s in ssr_selections_outbound
+        )
+        has_inbound_ssr = bool(ssr_selections_inbound) and any(
+            s is not None for s in ssr_selections_inbound
+        )
+
+        if has_outbound_ssr or has_inbound_ssr:
+            outbound_raw_ssr = await self.cache.get_model(
+                f"raw_ssr_{fare_id_outbound}", TBOSSRResponse
+            )
+            if (
+                has_outbound_ssr
+                or (has_inbound_ssr and is_international_return)
+            ) and outbound_raw_ssr is None:
+                raise HTTPException(
+                    status_code=status.HTTP_410_GONE,
+                    detail="Your session has expired. Please search again to get updated fares.",
+                )
+
+            if has_outbound_ssr:
+                verified_total_amount += self._compute_ssr_total_for_direction(
+                    raw_ssr=outbound_raw_ssr,
+                    selections=ssr_selections_outbound,
+                    leg_index=0,
+                    is_international_return=is_international_return,
+                )
+
+            if has_inbound_ssr:
+                if is_international_return:
+                    inbound_raw_ssr = outbound_raw_ssr
+                else:
+                    if not fare_id_inbound:
+                        raise HTTPException(
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="Inbound SSR selections received without an inbound fare.",
+                        )
+                    inbound_raw_ssr = await self.cache.get_model(
+                        f"raw_ssr_{fare_id_inbound}", TBOSSRResponse
+                    )
+                    if inbound_raw_ssr is None:
+                        raise HTTPException(
+                            status_code=status.HTTP_410_GONE,
+                            detail="Your session has expired. Please search again to get updated fares.",
+                        )
+                verified_total_amount += self._compute_ssr_total_for_direction(
+                    raw_ssr=inbound_raw_ssr,
+                    selections=ssr_selections_inbound,
+                    leg_index=1 if is_international_return else 0,
+                    is_international_return=is_international_return,
+                )
+
         return verified_total_amount
 
     def _validate_client_total_amount(
