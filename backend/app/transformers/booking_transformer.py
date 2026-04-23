@@ -6,6 +6,7 @@ This transformer converts provider responses into *our* confirmation schemas.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 
 from app.db.models.booking import Booking
@@ -24,6 +25,9 @@ from app.schemas.internal.booking import (
 )
 from app.schemas.tbo.booking_details import TBOGetBookingDetailsResponse
 from app.schemas.tbo.ticket import TBOTicketResponse
+from pydantic import ValidationError
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -97,7 +101,9 @@ class BookingConfirmationTransformer:
             passengers=self._extract_confirm_passengers(itinerary),
         )
 
-    def build_from_booking_record(self, *, booking: Booking) -> BookingLegTransformResult:
+    def build_from_booking_record(
+        self, *, booking: Booking
+    ) -> BookingLegTransformResult:
         """Used for idempotent duplicate-confirm retries.
 
         It reads enough from our DB to rebuild a stable response even if the original
@@ -113,17 +119,27 @@ class BookingConfirmationTransformer:
                 leg_status=booking_record_status_to_leg_status(booking.status),
                 booking_record_id=booking.id,
                 provider_booking_id=(
-                    booking.provider_booking_id if booking.provider_booking_id > 0 else None
+                    booking.provider_booking_id
+                    if booking.provider_booking_id > 0
+                    else None
                 ),
                 provider_pnr=booking.pnr,
                 provider_is_lcc=booking.is_lcc,
                 provider_ticket_status=booking.ticket_status,
                 provider_raw_available=bool(booking.provider_raw),
                 invoice_no=getattr(itinerary, "InvoiceNo", None) if itinerary else None,
-                invoice_amount=getattr(itinerary, "InvoiceAmount", None) if itinerary else None,
-                segment_baggage=self._extract_segment_baggage(itinerary) if itinerary else None,
-                fare_breakdown=self._extract_fare_breakdown(itinerary) if itinerary else None,
-                mini_fare_rules=self._extract_mini_fare_rules(itinerary) if itinerary else None,
+                invoice_amount=getattr(itinerary, "InvoiceAmount", None)
+                if itinerary
+                else None,
+                segment_baggage=self._extract_segment_baggage(itinerary)
+                if itinerary
+                else None,
+                fare_breakdown=self._extract_fare_breakdown(itinerary)
+                if itinerary
+                else None,
+                mini_fare_rules=self._extract_mini_fare_rules(itinerary)
+                if itinerary
+                else None,
             ),
             passengers=self._extract_confirm_passengers_from_booking_record(booking),
         )
@@ -157,7 +173,9 @@ class BookingConfirmationTransformer:
             passengers=None,
         )
 
-    def _extract_confirm_passengers(self, itinerary) -> list[ConfirmPassengerInfo] | None:
+    def _extract_confirm_passengers(
+        self, itinerary
+    ) -> list[ConfirmPassengerInfo] | None:
         passengers_info: list[ConfirmPassengerInfo] = []
         for provider_passenger in itinerary.Passenger or []:
             seat_numbers = None
@@ -225,7 +243,9 @@ class BookingConfirmationTransformer:
             return None
         tax_breakup = None
         if fare.TaxBreakup:
-            tax_breakup = [{"key": item.key, "value": item.value} for item in fare.TaxBreakup]
+            tax_breakup = [
+                {"key": item.key, "value": item.value} for item in fare.TaxBreakup
+            ]
         return FareBreakdownInfo(
             currency=fare.Currency or "INR",
             base_fare=fare.BaseFare or 0,
@@ -263,25 +283,38 @@ class BookingConfirmationTransformer:
         return mini_fare_rules or None
 
     def _extract_itinerary_from_raw(self, raw: dict):
-        """Best-effort extractor for provider_raw persisted in the DB.
+        """Rehydrate provider_raw into a real Pydantic itinerary.
 
-        Ticket responses store itinerary at Response.Response.FlightItinerary.
-        Recovery responses store itinerary at Response.FlightItinerary.
-        We intentionally keep this loose and defensive.
+        booking_service stores two shapes in provider_raw:
+        - Ticket flow:   TBOTicketResponse.model_dump(mode="json")
+                         → itinerary lives at .Response.Response.FlightItinerary
+                           (TicketItinerary)
+        - Recovery flow: TBOGetBookingDetailsResponse.model_dump(mode="json")
+                         → itinerary lives at .Response.FlightItinerary
+                           (BookingFlightItinerary)
+
+        Both itinerary types expose the attributes the downstream extract
+        helpers depend on:
+            .Passenger[*].SegmentAdditionalInfo, .Passenger[*].Ticket,
+            .Fare, .MiniFareRules, .InvoiceNo, .InvoiceAmount.
+
+        Returning None is safe — every caller already guards with
+        `if itinerary else None`.
         """
+        try:
+            return TBOTicketResponse.model_validate(
+                raw
+            ).Response.Response.FlightItinerary
+        except (ValidationError, AttributeError):
+            pass  # fall through to the recovery shape
 
-        response = raw.get("Response") or {}
-        nested_response = response.get("Response")
-        if isinstance(nested_response, dict) and nested_response.get("FlightItinerary"):
-            class DictShim:
-                def __init__(self, data: dict):
-                    self.__dict__.update(data)
-            itinerary = nested_response.get("FlightItinerary")
-            return DictShim(itinerary)
-        itinerary = response.get("FlightItinerary")
-        if isinstance(itinerary, dict):
-            class DictShim:
-                def __init__(self, data: dict):
-                    self.__dict__.update(data)
-            return DictShim(itinerary)
-        return None
+        try:
+            return TBOGetBookingDetailsResponse.model_validate(
+                raw
+            ).Response.FlightItinerary
+        except (ValidationError, AttributeError):
+            logger.warning(
+                "build_from_booking_record: provider_raw didn't match ticket or "
+                "booking-details schema; downstream extractors will see itinerary=None"
+            )
+            return None

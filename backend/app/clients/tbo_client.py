@@ -9,7 +9,7 @@ from typing import Optional
 import httpx
 from app.clients.exceptions import ExternalProviderError
 from app.config import settings
-from app.core.logging import sanitize_for_logging, truncate_for_logging
+from app.core.logging import sanitize_for_logging
 from app.schemas.tbo import (
     # Auth
     TBOAuthRequest,
@@ -42,8 +42,7 @@ from app.schemas.tbo import (
 from app.schemas.tbo.search import Itinerary
 from pydantic import ValidationError
 
-# Dedicated logger name routes to the tbo_file handler in logging config
-logger = logging.getLogger("app.integrations.tbo")
+logger = logging.getLogger("app.clients.tbo")
 
 
 class TBOParseError(Exception):
@@ -87,7 +86,7 @@ _MEAL_REQUIRED_MARKERS = (
 class TBOClient:
     """Client to interact with TBO API."""
 
-    _cached_token: Optional[str] = None
+    _cached_token: Optional[str] = None  # class-level attribute
     _cached_agency_id: Optional[int] = None
     _cached_member_id: Optional[int] = None
     _cached_date: Optional[str] = None  # YYYY-MM-DD
@@ -101,6 +100,23 @@ class TBOClient:
             "Content-Type": "application/json",
             "Accept-Encoding": "gzip",
         }
+        # Persistent HTTP client: one TCP connection pool for the whole process.
+        # Default timeout is modest; each call overrides via the 'timeout=' arg.
+        # `limits` caps total open connections so a burst of booking traffic
+        # doesn't open hundreds of sockets to TBO.
+        self._http_client = httpx.AsyncClient(
+            headers=self.headers,
+            timeout=httpx.Timeout(60, connect=10),
+            limits=httpx.Limits(
+                max_connections=50,
+                max_keepalive_connections=20,
+                keepalive_expiry=30.0,
+            ),
+        )
+
+    async def close(self) -> None:
+        """Close the underlying HTTP connection pool. Call from app shutdown."""
+        await self._http_client.aclose()
 
     def _log_tbo_request(self, *, operation: str, url: str, payload: dict) -> None:
         log_payload: dict = {
@@ -122,26 +138,38 @@ class TBOClient:
         response_data: dict | None = None,
         raw_text: str | None = None,
     ) -> None:
-        # Always log metadata at INFO
-        log_meta = {
-            "event": "tbo.response",
-            "operation": operation,
-            "url": url,
-            "status_code": status_code,
-            "duration_ms": round(elapsed_ms, 2),
-        }
-        logger.info(json.dumps(log_meta, default=str))
+        logger.info(
+            json.dumps(
+                {
+                    "event": "tbo.response",
+                    "operation": operation,
+                    "url": url,
+                    "status_code": status_code,
+                    "duration_ms": round(elapsed_ms, 2),
+                },
+                default=str,
+            )
+        )
 
-        # Log response body at DEBUG only (can be very large for search responses)
-        if settings.ENABLE_TBO_BODY_LOGGING and logger.isEnabledFor(logging.DEBUG):
-            body_payload: dict = {"event": "tbo.response.body", "operation": operation}
-            if response_data is not None:
-                body_payload["body"] = sanitize_for_logging(response_data)
-            elif raw_text is not None:
-                body_payload["body"] = truncate_for_logging(
-                    raw_text, settings.LOG_MAX_BODY_CHARS
-                )
-            logger.debug(json.dumps(body_payload, default=str))
+        if not settings.ENABLE_TBO_BODY_LOGGING:
+            return
+
+        is_dev = settings.APP_ENV == "development"
+        body_level = logging.INFO if is_dev else logging.DEBUG
+        if not logger.isEnabledFor(body_level):
+            return
+
+        body_payload: dict = {"event": "tbo.response.body", "operation": operation}
+        if response_data is not None:
+            body_payload["body"] = sanitize_for_logging(response_data)
+        elif raw_text is not None:
+            # Raw text is usually a TBO error page — cap it
+            body_payload["body"] = raw_text[:12000]
+
+        logger.log(
+            body_level,
+            json.dumps(body_payload, default=str, indent=2 if is_dev else None),
+        )
 
     async def _post_tbo_json(
         self,
@@ -153,10 +181,13 @@ class TBOClient:
     ) -> dict:
         self._log_tbo_request(operation=operation, url=url, payload=payload_data)
 
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            started = time.perf_counter()
-            resp = await client.post(url, json=payload_data, headers=self.headers)
-            elapsed_ms = (time.perf_counter() - started) * 1000
+        started = time.perf_counter()
+        resp = await self._http_client.post(
+            url,
+            json=payload_data,
+            timeout=timeout,  # per-call override; keep-alive connection is reused
+        )
+        elapsed_ms = (time.perf_counter() - started) * 1000
 
         if resp.status_code != 200:
             self._log_tbo_response(
@@ -295,13 +326,17 @@ class TBOClient:
                 )
 
             # --- Cache the token until midnight ---
-            self._cached_token = parsed.TokenId
-            self._cached_date = today
-            self._cached_agency_id = parsed.Member.AgencyId if parsed.Member else None
-            self._cached_member_id = parsed.Member.MemberId if parsed.Member else None
+            TBOClient._cached_token = parsed.TokenId
+            TBOClient._cached_date = today
+            TBOClient._cached_agency_id = (
+                parsed.Member.AgencyId if parsed.Member else None
+            )
+            TBOClient._cached_member_id = (
+                parsed.Member.MemberId if parsed.Member else None
+            )
             logger.info("TBO token cached successfully until midnight UTC")
 
-            return self._cached_token
+            return TBOClient._cached_token
 
     async def get_token(self) -> str:
         """Public method to fetch (or reuse) a valid token."""
@@ -358,10 +393,10 @@ class TBOClient:
             )
 
         # clear cached data
-        self._cached_token = None
-        self._cached_agency_id = None
-        self._cached_member_id = None
-        self._cached_date = None
+        TBOClient._cached_token = None
+        TBOClient._cached_agency_id = None
+        TBOClient._cached_member_id = None
+        TBOClient._cached_date = None
 
         return True
 
@@ -461,40 +496,64 @@ class TBOClient:
 
     async def get_fare_rule(self, payload: TBOFareRuleRequest) -> TBOFareRuleResponse:
         return await self._call_tbo_api(
-            operation="TBO FareRule", endpoint="FareRule",
-            payload=payload, response_model=TBOFareRuleResponse, timeout=60,
+            operation="TBO FareRule",
+            endpoint="FareRule",
+            payload=payload,
+            response_model=TBOFareRuleResponse,
+            timeout=60,
         )
 
-    async def get_fare_quote(self, payload: TBOFareQuoteRequest) -> TBOFareQuoteResponse:
+    async def get_fare_quote(
+        self, payload: TBOFareQuoteRequest
+    ) -> TBOFareQuoteResponse:
         return await self._call_tbo_api(
-            operation="TBO FareQuote", endpoint="FareQuote",
-            payload=payload, response_model=TBOFareQuoteResponse, timeout=60,
+            operation="TBO FareQuote",
+            endpoint="FareQuote",
+            payload=payload,
+            response_model=TBOFareQuoteResponse,
+            timeout=60,
         )
 
     async def get_ssr(self, payload: TBOSSRRequest) -> TBOSSRResponse:
         return await self._call_tbo_api(
-            operation="TBO SSR", endpoint="SSR",
-            payload=payload, response_model=TBOSSRResponse, timeout=60,
+            operation="TBO SSR",
+            endpoint="SSR",
+            payload=payload,
+            response_model=TBOSSRResponse,
+            timeout=60,
         )
 
     async def book_flight(self, payload: TBOBookRequest) -> TBOBookResponse:
         return await self._call_tbo_api(
-            operation="TBO Book", endpoint="Book",
-            payload=payload, response_model=TBOBookResponse, timeout=300,
+            operation="TBO Book",
+            endpoint="Book",
+            payload=payload,
+            response_model=TBOBookResponse,
+            timeout=300,
             critical=True,
         )
 
-    async def generate_ticket_lcc(self, payload: TBOTicketLCCRequest) -> TBOTicketResponse:
+    async def generate_ticket_lcc(
+        self, payload: TBOTicketLCCRequest
+    ) -> TBOTicketResponse:
         return await self._call_tbo_api(
-            operation="TBO TicketLCC", endpoint="Ticket",
-            payload=payload, response_model=TBOTicketResponse, timeout=300,
+            operation="TBO TicketLCC",
+            endpoint="Ticket",
+            payload=payload,
+            response_model=TBOTicketResponse,
+            timeout=300,
             critical=True,
         )
 
-    async def generate_ticket_nonlcc(self, payload: TBOTicketNonLCCRequest) -> TBOTicketResponse:
+    async def generate_ticket_nonlcc(
+        self, payload: TBOTicketNonLCCRequest
+    ) -> TBOTicketResponse:
         return await self._call_tbo_api(
-            operation="TBO TicketNonLCC", endpoint="Ticket",
-            payload=payload, response_model=TBOTicketResponse, timeout=300,
+            operation="TBO TicketNonLCC",
+            endpoint="Ticket",
+            payload=payload,
+            response_model=TBOTicketResponse,
+            timeout=300,
             critical=True,
         )
 
@@ -578,9 +637,14 @@ class TBOClient:
         )
         return None
 
-    async def get_booking_details(self, payload: TBOGetBookingDetailsRequest) -> TBOGetBookingDetailsResponse:
+    async def get_booking_details(
+        self, payload: TBOGetBookingDetailsRequest
+    ) -> TBOGetBookingDetailsResponse:
         return await self._call_tbo_api(
-            operation="TBO GetBookingDetails", endpoint="GetBookingDetails",
-            payload=payload, response_model=TBOGetBookingDetailsResponse, timeout=60,
+            operation="TBO GetBookingDetails",
+            endpoint="GetBookingDetails",
+            payload=payload,
+            response_model=TBOGetBookingDetailsResponse,
+            timeout=60,
             check_status=False,
         )

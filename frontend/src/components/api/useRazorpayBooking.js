@@ -41,9 +41,9 @@ export function useRazorpayBooking(token) {
                     ) ?? null;
 
                 const ssrSelectionsInbound = bookingPayload.fareIdInbound
-                    ? bookingPayload.passengers?.flatMap(
+                    ? (bookingPayload.passengers?.flatMap(
                           (p) => p.ssrSegmentsInbound ?? [],
-                      ) ?? null
+                      ) ?? null)
                     : null;
 
                 const createOrderPayload = {
@@ -118,7 +118,6 @@ export function useRazorpayBooking(token) {
                             bookingPayload.isInternationalReturn ?? false,
                         passengers: bookingPayload.passengers,
                         clientTotalAmount: bookingPayload.totalAmount,
-                        acceptPriceChange: false,
                         paymentOrderId: response.razorpay_order_id,
                         paymentId: response.razorpay_payment_id,
                         paymentSignature: response.razorpay_signature,
@@ -139,7 +138,7 @@ export function useRazorpayBooking(token) {
                                 },
                                 body: JSON.stringify(payload),
                             },
-                            120_000,
+                            240_000,
                         );
 
                         // console.log(
@@ -169,52 +168,19 @@ export function useRazorpayBooking(token) {
 
                     try {
                         setProcessingStep(1);
-
-                        let booking = await confirmBooking(confirmPayload);
-                        // console.log("[BOOKING AFTER CONFIRM]", booking);
-
-                        const legs = [
-                            booking?.outboundLeg,
-                            booking?.inboundLeg,
-                        ].filter(Boolean);
-
-                        const needsReconfirm =
-                            booking?.overallStatus === "pending" &&
-                            legs.some(
-                                (leg) =>
-                                    leg?.providerPriceChanged ||
-                                    leg?.providerTimeChanged,
-                            );
-
-                        if (needsReconfirm) {
-                            const accepted = window.confirm(
-                                "Airline fare/time changed. Click OK to confirm booking again with updated details.",
-                            );
-
-                            if (!accepted) {
-                                setIsProcessing(false);
-                                onError(
-                                    "Booking paused. Please review updated fare/time and confirm again.",
-                                );
-                                return;
-                            }
-
-                            setProcessingStep(1);
-
-                            booking = await confirmBooking({
-                                ...confirmPayload,
-                                acceptPriceChange: true,
-                            });
-
-                            // console.log("[BOOKING AFTER RECONFIRM]", booking);
-                        }
-
+                        const booking = await confirmBooking(confirmPayload);
                         setProcessingStep(2);
-                        // console.log("[BOOKING BEFORE ONSUCCESS]", booking);
                         onSuccess(booking);
                     } catch (err) {
-                        // console.error("[BOOKING CONFIRM FLOW ERROR]", err);
-                        onError(err.message);
+                        // map the timeout to a user friendly message
+                        const isTimeout =
+                            err?.name === "TimeoutError" ||
+                            err?.name === "AbortError";
+                        onError(
+                            isTimeout
+                                ? "Your payment was received and your booking is still being finalized. Please check your email in a few minutes for your e-ticket. Do NOT pay again - contact support@fareclubs.com if you dont receive an email within 15 minutes."
+                                : err.message,
+                        );
                     } finally {
                         setIsProcessing(false);
                         setProcessingStep(0);

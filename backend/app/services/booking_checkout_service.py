@@ -25,6 +25,7 @@ from app.domain.booking_enums import (
     SUCCESS_TICKET_STATUSES,
     BookingLegStatus,
     BookingOverallStatus,
+    BookingRecordStatus,
     BookStatus,
     LegDirection,
     TicketStatus,
@@ -113,6 +114,14 @@ class BookingCheckoutService:
         self.response_transformer = response_transformer
         self.booking_service = booking_service
 
+    @staticmethod
+    def _is_price_changed(response: TBOTicketResponse) -> bool:
+        """Safe accessor — defensive against malformed responses."""
+        inner = getattr(response.Response, "Response", None)
+        if inner is None:
+            return False
+        return inner.TicketStatus == TicketStatus.PRICE_CHANGED
+
     async def create_payment_order(
         self,
         *,
@@ -183,14 +192,10 @@ class BookingCheckoutService:
         # rotation between order and confirm.
         outbound_cached_fare = await self._require_cached_fare(payload.fare_id_outbound)
         ssr_outbound = [
-            sel
-            for p in payload.passengers
-            for sel in (p.ssr_segments_outbound or [])
+            sel for p in payload.passengers for sel in (p.ssr_segments_outbound or [])
         ]
         ssr_inbound = [
-            sel
-            for p in payload.passengers
-            for sel in (p.ssr_segments_inbound or [])
+            sel for p in payload.passengers for sel in (p.ssr_segments_inbound or [])
         ]
         verified_total_amount = await self._compute_verified_total_amount(
             fare_id_outbound=payload.fare_id_outbound,
@@ -224,14 +229,34 @@ class BookingCheckoutService:
                 payment.id
             )
             if existing_bookings:
-                logger.warning(
-                    "[%s] duplicate confirm request for payment_order_id=%s",
-                    request_id,
-                    payload.payment_order_id,
+                terminal_statuses = {
+                    BookingRecordStatus.CONFIRMED.value,
+                    BookingRecordStatus.NEEDS_ATTENTION.value,
+                    BookingRecordStatus.FAILED.value,
+                }
+                all_terminal = all(
+                    b.status in terminal_statuses for b in existing_bookings
                 )
-                return self._build_response_from_existing_bookings(
-                    bookings=existing_bookings,
-                    payload=payload,
+                if all_terminal:
+                    logger.warning(
+                        "[%s] duplicate confirm request for payment_order_id=%s "
+                        "(existing statuses=%s) — replaying stored response",
+                        request_id,
+                        payload.payment_order_id,
+                        [b.status for b in existing_bookings],
+                    )
+                    return self._build_response_from_existing_bookings(
+                        bookings=existing_bookings,
+                        payload=payload,
+                    )
+                # Non-terminal (e.g. PENDING from a crashed prior run): fall
+                # through and re-attempt the TBO Book/Ticket cycle. PNR uniqueness
+                # at the DB layer protects us from creating duplicate rows.
+                logger.info(
+                    "[%s] duplicate confirm but existing booking(s) non-terminal "
+                    "(statuses=%s) — re-running TBO cycle",
+                    request_id,
+                    [b.status for b in existing_bookings],
                 )
 
         execution_results = await asyncio.gather(
@@ -417,27 +442,45 @@ class BookingCheckoutService:
             return result
 
     async def _ticket_single_leg(
-        self,
-        *,
-        item: LegWorkItem,
-        payload: BookingConfirmRequest,
-        end_user_ip: str,
+        self, *, item: LegWorkItem, payload: BookingConfirmRequest, end_user_ip: str
     ) -> TBOTicketResponse:
+        """
+        Issue the ticket for one leg.
+        TBO's ticket call is effectively two-phase when it detects a fare delta:
+        the first call returns TicketStatus=PRICE_CHANGED as a checkpoint and
+        does NOT issue, even when IsPriceChangeAccepted=True is set. Retrying
+        once with the same args lets TBO commit at the new price.
+
+        We retry exactly once. If the second call also returns PRICE_CHANGED,
+        something else is going on (rare TBO quirk, or a delta we genuinely
+        cannot accept) and we let the caller persist as NEEDS_ATTENTION.
+        """
+
         if item.is_lcc:
             lcc_request = self.request_transformer.transform_ticket_lcc_request(
-                payload,
-                item.cached_fare,
-                end_user_ip,
-                item.raw_ssr,
+                request=payload,
+                cached_data=item.cached_fare,
+                end_user_ip=end_user_ip,
+                raw_ssr=item.raw_ssr,
                 direction=item.direction.value,
             )
-            return await self.client.generate_ticket_lcc(lcc_request)
+            response = await self.client.generate_ticket_lcc(lcc_request)
+            if self._is_price_changed(response):
+                logger.info(
+                    "TBO returned PRICE_CHANGED on first LCC Ticket; retrying once "
+                    "(IsPriceChangeAccepted=True, trace_id=%s)",
+                    item.cached_fare.get("TraceId"),
+                )
+                response = await self.client.generate_ticket_lcc(lcc_request)
 
+            return response
+
+        # non-LCC
         book_request = self.request_transformer.transform_book_request(
-            payload,
-            item.cached_fare,
-            end_user_ip,
-            item.raw_ssr,
+            request=payload,
+            cached_data=item.cached_fare,
+            end_user_ip=end_user_ip,
+            raw_ssr=item.raw_ssr,
             direction=item.direction.value,
         )
         book_response = await self.client.book_flight(book_request)
@@ -446,7 +489,7 @@ class BookingCheckoutService:
             raise ExternalProviderError(
                 provider_code="BOOK_FAILED",
                 http_status=502,
-                message="TBO Book did not return booking details.",
+                message="Booking failed: empty response from provider",
             )
 
         non_lcc_ticket_request = TBOTicketNonLCCRequest(
@@ -457,7 +500,16 @@ class BookingCheckoutService:
             BookingId=book_inner.BookingId,
             IsPriceChangeAccepted=True,
         )
-        return await self.client.generate_ticket_nonlcc(non_lcc_ticket_request)
+        response = await self.client.generate_ticket_nonlcc(non_lcc_ticket_request)
+        if self._is_price_changed(response):
+            logger.info(
+                "TBO returned PRICE_CHANGED on first NonLCC Ticket; retrying once "
+                "(PNR=%s, BookingId=%s)",
+                book_inner.PNR,
+                book_inner.BookingId,
+            )
+            response = await self.client.generate_ticket_nonlcc(non_lcc_ticket_request)
+        return response
 
     async def _persist_leg_result(
         self,
@@ -899,8 +951,7 @@ class BookingCheckoutService:
                 f"raw_ssr_{fare_id_outbound}", TBOSSRResponse
             )
             if (
-                has_outbound_ssr
-                or (has_inbound_ssr and is_international_return)
+                has_outbound_ssr or (has_inbound_ssr and is_international_return)
             ) and outbound_raw_ssr is None:
                 raise HTTPException(
                     status_code=status.HTTP_410_GONE,

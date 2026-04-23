@@ -14,7 +14,7 @@ from sqlalchemy.orm import DeclarativeBase
 # Create async engine
 engine = create_async_engine(
     settings.DATABASE_URL,
-    echo=False,
+    echo=True,  # Log SQL queries for debugging (disable in production)
     pool_pre_ping=True,  # Automatically test connections
     pool_size=10,  # Default connection pool size
     max_overflow=20,  # Temporary extra connections if needed

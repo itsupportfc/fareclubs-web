@@ -1,7 +1,5 @@
-import json
 import logging
 import logging.config
-from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
 from typing import Any
 
@@ -31,12 +29,14 @@ DEFAULT_REDACT_FIELDS = {
 }
 
 
+# inject request_id into every log record
 class RequestIdFilter(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
         record.request_id = get_request_id()
         return True
 
 
+# Prevents crashes if request_id missing
 class SafeExtraFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         if not hasattr(record, "request_id"):
@@ -44,38 +44,31 @@ class SafeExtraFormatter(logging.Formatter):
         return super().format(record)
 
 
-def _project_logs_dir() -> Path:
+def _logs_dir() -> Path:
+    if settings.BACKEND_LOG_DIR:
+        return Path(settings.BACKEND_LOG_DIR)
     backend_root = Path(__file__).resolve().parents[2]
-    if backend_root.name.lower() == "backend":
-        return backend_root.parent / "logs"
-    return backend_root / "logs"
-
-
-def get_logs_dir() -> Path:
-    return Path(settings.BACKEND_LOG_DIR) if settings.BACKEND_LOG_DIR else _project_logs_dir()
-
-
-def get_log_paths() -> dict[str, Path]:
-    logs_dir = get_logs_dir()
-    logs_dir.mkdir(parents=True, exist_ok=True)
-    return {
-        "backend": Path(settings.BACKEND_LOG_FILE) if settings.BACKEND_LOG_FILE else logs_dir / "backend.log",
-        "internal_api": Path(settings.INTERNAL_API_LOG_FILE) if settings.INTERNAL_API_LOG_FILE else logs_dir / "internal_api.log",
-        "tbo": Path(settings.TBO_LOG_FILE) if settings.TBO_LOG_FILE else logs_dir / "tbo_api.log",
-    }
+    base = (
+        backend_root.parent if backend_root.name.lower() == "backend" else backend_root
+    )
+    return base / "logs"
 
 
 def setup_logging() -> None:
-    log_paths = get_log_paths()
-    console_handlers = ["console"] if settings.ENABLE_CONSOLE_LOGGING else []
+    logs_dir = _logs_dir()
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    log_file = logs_dir / "backend.log"
+
+    handlers = ["file"]
+    if settings.ENABLE_CONSOLE_LOGGING:
+        handlers.append("console")
+
     logging.config.dictConfig(
         {
             "version": 1,
             "disable_existing_loggers": False,
             "filters": {
-                "request_id": {
-                    "()": "app.core.logging.RequestIdFilter",
-                }
+                "request_id": {"()": "app.core.logging.RequestIdFilter"},
             },
             "formatters": {
                 "standard": {
@@ -84,6 +77,7 @@ def setup_logging() -> None:
                 }
             },
             "handlers": {
+                # logs to terminal
                 "console": {
                     "class": "logging.StreamHandler",
                     "level": settings.LOG_LEVEL,
@@ -91,32 +85,12 @@ def setup_logging() -> None:
                     "filters": ["request_id"],
                     "stream": "ext://sys.stdout",
                 },
-                "backend_file": {
+                "file": {
                     "class": "logging.handlers.TimedRotatingFileHandler",
                     "level": settings.LOG_LEVEL,
                     "formatter": "standard",
                     "filters": ["request_id"],
-                    "filename": str(log_paths["backend"]),
-                    "when": "midnight",
-                    "backupCount": settings.LOG_RETENTION_DAYS,
-                    "encoding": "utf-8",
-                },
-                "internal_api_file": {
-                    "class": "logging.handlers.TimedRotatingFileHandler",
-                    "level": settings.LOG_LEVEL,
-                    "formatter": "standard",
-                    "filters": ["request_id"],
-                    "filename": str(log_paths["internal_api"]),
-                    "when": "midnight",
-                    "backupCount": settings.LOG_RETENTION_DAYS,
-                    "encoding": "utf-8",
-                },
-                "tbo_file": {
-                    "class": "logging.handlers.TimedRotatingFileHandler",
-                    "level": settings.LOG_LEVEL,
-                    "formatter": "standard",
-                    "filters": ["request_id"],
-                    "filename": str(log_paths["tbo"]),
+                    "filename": str(log_file),
                     "when": "midnight",
                     "backupCount": settings.LOG_RETENTION_DAYS,
                     "encoding": "utf-8",
@@ -124,35 +98,24 @@ def setup_logging() -> None:
             },
             "root": {
                 "level": settings.LOG_LEVEL,
-                "handlers": console_handlers + ["backend_file"],
+                "handlers": handlers,
             },
+            # Ensures FastAPI server logs use same format
             "loggers": {
                 "uvicorn": {
                     "level": settings.LOG_LEVEL,
-                    "handlers": console_handlers + ["backend_file"],
+                    "handlers": handlers,
                     "propagate": False,
                 },
                 "uvicorn.error": {
                     "level": settings.LOG_LEVEL,
-                    "handlers": console_handlers + ["backend_file"],
+                    "handlers": handlers,
                     "propagate": False,
                 },
                 "uvicorn.access": {
                     "level": settings.LOG_LEVEL,
-                    "handlers": console_handlers + ["backend_file"],
+                    "handlers": handlers,
                     "propagate": False,
-                },
-                "app.internal_api": {
-                    "level": settings.LOG_LEVEL,
-                    "handlers": ["internal_api_file"],
-                    "propagate": True,
-                },
-                # Logger name intentionally differs from module path
-                # (app.clients.tbo_client) to route TBO logs to a dedicated file.
-                "app.integrations.tbo": {
-                    "level": settings.LOG_LEVEL,
-                    "handlers": ["tbo_file"],
-                    "propagate": True,
                 },
             },
         }
@@ -162,7 +125,9 @@ def setup_logging() -> None:
 def _normalize_redact_fields(custom_fields: str | None) -> set[str]:
     fields = set(DEFAULT_REDACT_FIELDS)
     if custom_fields:
-        fields.update(part.strip().lower() for part in custom_fields.split(",") if part.strip())
+        fields.update(
+            part.strip().lower() for part in custom_fields.split(",") if part.strip()
+        )
     return fields
 
 
@@ -185,32 +150,3 @@ def sanitize_for_logging(value: Any, redact_fields: set[str] | None = None) -> A
         return tuple(sanitize_for_logging(item, fields) for item in value)
 
     return value
-
-
-def truncate_for_logging(value: Any, max_chars: int | None = None) -> Any:
-    limit = max_chars or settings.LOG_MAX_BODY_CHARS
-    if isinstance(value, str) and len(value) > limit:
-        return f"{value[:limit]}... [truncated {len(value) - limit} chars]"
-    return value
-
-
-def dump_for_logging(value: Any, *, max_chars: int | None = None) -> str:
-    try:
-        sanitized = sanitize_for_logging(value)
-        rendered = json.dumps(sanitized, default=str, ensure_ascii=False)
-    except Exception:
-        rendered = str(value)
-    return truncate_for_logging(rendered, max_chars)
-
-
-def parse_body_for_logging(content_type: str | None, body: bytes) -> Any:
-    if not body:
-        return None
-
-    text = body.decode("utf-8", errors="replace")
-    if content_type and "application/json" in content_type.lower():
-        try:
-            return json.loads(text)
-        except json.JSONDecodeError:
-            return text
-    return text

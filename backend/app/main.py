@@ -2,8 +2,9 @@ import logging
 from contextlib import asynccontextmanager
 
 from app.api.v1 import airports, auth, flight, flight_booking
+from app.api.v1.dependencies import _tbo_client
 from app.clients.exceptions import ExternalProviderError
-from app.core.http_logging import RequestResponseLoggingMiddleware
+from app.core.http_logging import RequestIdMiddleware
 from app.core.logging import setup_logging
 from app.utils.cache import FlightCache, flight_cache, get_flight_cache
 from fastapi import Depends, FastAPI, status
@@ -24,6 +25,7 @@ async def lifespan(app: FastAPI):
     yield
     logger.info("Shutting down Flight Backend API")
     await flight_cache.close()
+    await _tbo_client.close()  # release TBO HTTP connection pool
 
 
 app = FastAPI(
@@ -43,7 +45,7 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
 )
-app.add_middleware(RequestResponseLoggingMiddleware)
+app.add_middleware(RequestIdMiddleware)
 
 limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
@@ -110,4 +112,3 @@ app.include_router(auth.router, prefix="/api/v1")
 app.include_router(flight.router, prefix="/api/v1")
 app.include_router(flight_booking.router, prefix="/api/v1")
 app.include_router(airports.router, prefix="/api/v1")
-

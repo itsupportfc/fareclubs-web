@@ -472,5 +472,14 @@ async def get_ssr_details(
                     )
 
         return SsrResponse(outbound=outbound_view, inbound=inbound_view)
-    except (ExternalProviderError, Exception):
+    except ExternalProviderError as e:
+        # TBO doesn't support SSR for this flight — return empty options
+        logger.warning(
+            "SSR unavailable for fare_id=%s: %s",
+            payload.fare_id_outbound,
+            e.message,
+        )
         return SsrResponse(outbound=None, inbound=None)
+    # this is silently swallowing all the errors
+    # except (ExternalProviderError, Exception):
+    #     return SsrResponse(outbound=None, inbound=None)

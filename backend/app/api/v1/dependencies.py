@@ -1,17 +1,24 @@
-from fastapi import Request
-
 from app.clients.tbo_client import TBOClient
 from app.transformers.tbo_transformer import TBOTransformer
+from fastapi import Request
+
+# process-wide singletons. Instantiated once at module import, reused
+# across all requests. this is what makes caching in TBOCLient actually
+# meaningfull between diff requests.
+
+_tbo_client = TBOClient()
+_tbo_transformer = TBOTransformer()
 
 
+# ISSUE: returns new instance per request
 def get_tbo_client() -> TBOClient:
-    """Dependency to get TBOClient instance"""
-    return TBOClient()
+    """Dependency: return the process-wide TBOClient singleton."""
+    return _tbo_client
 
 
 def get_tbo_transformer() -> TBOTransformer:
-    """Dependency to get TBOTransformer instance"""
-    return TBOTransformer()
+    """Dependency: return the process-wide TBOTransformer singleton."""
+    return _tbo_transformer
 
 
 def get_end_user_ip(request: Request) -> str:
