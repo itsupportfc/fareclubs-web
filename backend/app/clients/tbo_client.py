@@ -126,7 +126,7 @@ class TBOClient:
         }
         if settings.ENABLE_TBO_BODY_LOGGING:
             log_payload["payload"] = sanitize_for_logging(payload)
-        logger.info(json.dumps(log_payload, default=str))
+        logger.info(json.dumps(log_payload, default=str,indent=2))
 
     def _log_tbo_response(
         self,
@@ -148,6 +148,7 @@ class TBOClient:
                     "duration_ms": round(elapsed_ms, 2),
                 },
                 default=str,
+                indent=2
             )
         )
 

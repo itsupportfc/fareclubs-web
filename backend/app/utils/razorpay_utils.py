@@ -20,12 +20,6 @@ _razorpay_client = razorpay.Client(
 )
 
 
-def _client() -> razorpay.Client:
-    return razorpay.Client(
-        auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET)
-    )
-
-
 def create_order(amount_paise: int, receipt: str) -> dict:
     """Create a Razorpay order. Returns the full order dict from Razorpay."""
     return _razorpay_client.order.create(

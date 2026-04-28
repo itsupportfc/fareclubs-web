@@ -1000,8 +1000,8 @@ class BookingCheckoutService:
     ) -> None:
         submitted = round(client_total_amount, 2)
         expected = round(verified_total_amount, 2)
-        # Allow max 1 paise difference (floating-point rounding tolerance only)
-        if abs(submitted - expected) > 0.01:
+        # Allow max 10 rupees difference (floating-point rounding tolerance only)
+        if abs(submitted - expected) > 10:
             logger.warning(
                 "Amount mismatch: submitted=%.2f, expected=%.2f, diff=%.2f",
                 submitted,

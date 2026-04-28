@@ -6,6 +6,7 @@ from app.api.v1.dependencies import _tbo_client
 from app.clients.exceptions import ExternalProviderError
 from app.core.http_logging import RequestIdMiddleware
 from app.core.logging import setup_logging
+from app.core.response_logging import ResponseLoggingMiddleware
 from app.utils.cache import FlightCache, flight_cache, get_flight_cache
 from fastapi import Depends, FastAPI, status
 from fastapi.responses import JSONResponse
@@ -37,6 +38,11 @@ app = FastAPI(
     lifespan=lifespan,
 )
 app.mount("/static", StaticFiles(directory="static"), name="static")
+
+app.add_middleware(
+    ResponseLoggingMiddleware,
+    api_prefix="/api/v1",
+)
 
 app.add_middleware(
     CORSMiddleware,

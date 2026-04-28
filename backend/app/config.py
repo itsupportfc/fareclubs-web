@@ -34,7 +34,7 @@ class Settings(BaseSettings):
     APP_ENV: str = "development"
     LOG_LEVEL: str = "INFO"
     LOG_RETENTION_DAYS: int = 14
-    ENABLE_CONSOLE_LOGGING: bool = True
+    ENABLE_CONSOLE_LOGGING: bool = False
     ENABLE_TBO_BODY_LOGGING: bool = True
     LOG_REDACT_FIELDS: str = ""
     BACKEND_LOG_DIR: str | None = None

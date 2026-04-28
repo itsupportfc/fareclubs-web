@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 
 from app.api.v1.dependencies import get_end_user_ip, get_tbo_client, get_tbo_transformer
@@ -53,6 +54,11 @@ async def search_flights(
         tbo_response = await client.search(tbo_request)
         response = await transformer.transform_search_response(
             tbo_response, payload, cache
+        )
+        logger.log(
+            logging.INFO,
+            "Internal Search API",
+            json.dumps(response, default=str, indent=2),
         )
         return response
     except ExternalProviderError as e:

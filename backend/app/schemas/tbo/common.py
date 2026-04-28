@@ -167,15 +167,32 @@ class Fare(TBOBaseSchema):
     ChargeBU: list[KeyValue] = []
 
     # Pricing
-    Discount: Annotated[float, Field(description=" Will be zero for API customer.")] = 0.0
-    PublishedFare: float
-    OfferedFare: float
+    Discount: Annotated[float, Field(description=" Will be zero for API customer.")] = (
+        0.0
+    )
+    PublishedFare: Annotated[
+        float,
+        Field(
+            description="What to show to the customer. \n"
+            "it is for total charge for all the passengers \n"
+        ),
+    ]
+    OfferedFare: Annotated[
+        float,
+        Field(
+            description="what we get the ticket for, our commision added in this = PublishedFare"
+        ),
+    ]
     ServiceFee: float = 0.0
 
     # Commission (sensitive - internal use only)
-    CommissionEarned: float = 0.0
-    PLBEarned: float = 0.0
-    IncentiveEarned: float = 0.0
+    CommissionEarned: Annotated[
+        float, Field(description="Total commission made by us.")
+    ]
+    PLBEarned: Annotated[
+        float, Field(description="Performance Linked Bonus on a particular airline.")
+    ]
+    IncentiveEarned: Annotated[float, Field(description="Incentive applicable(if any)")]
     TdsOnCommission: float = 0.0
     TdsOnPLB: float = 0.0
     TdsOnIncentive: float = 0.0
@@ -300,7 +317,7 @@ class Seat(TBOBaseSchema):
     Origin: str
     Destination: str
     AvailablityType: SeatAvailabilityTypeEnum
-    Description: SeatDescriptionEnum 
+    Description: SeatDescriptionEnum
     Code: str
     RowNo: str
     SeatNo: str | None = None
