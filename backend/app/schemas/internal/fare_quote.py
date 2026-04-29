@@ -24,7 +24,8 @@ class FlightPriceDetail(InternalBaseSchema):
 
 
 class PerPassengerFare(InternalBaseSchema):
-    """Per-HEAD fare for a specific passenger type.
+    """
+    Per-HEAD fare for a specific passenger type.
 
     TBO FareBreakdown gives aggregate fare per pax_type (e.g. total for 2 adults).
     We divide by PassengerCount so the frontend can assign per-passenger fares
@@ -34,12 +35,14 @@ class PerPassengerFare(InternalBaseSchema):
     pax_type: int  # 1=Adult, 2=Child, 3=Infant
     currency: str = "INR"
     base_fare: float
-    tax: float
-    yq_tax: float = 0
-    other_charges: float = 0
-    additional_txn_fee_ofrd: float = 0
-    additional_txn_fee_pub: float = 0
-    pg_charge: float = 0
+    # tax: float
+    # yq_tax: float = 0
+    # other_charges: float = 0
+    # additional_txn_fee_ofrd: float = 0
+    # additional_txn_fee_pub: float = 0
+    # pg_charge: float = 0
+    taxes_and_surcharges: float
+    total_fare: float
 
 
 class FareQuoteFlags(InternalBaseSchema):

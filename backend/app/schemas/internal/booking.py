@@ -77,7 +77,7 @@ class PassengerInfo(InternalBaseSchema):
     pan: str | None = None
     gst: GstInfo | None = None
 
-    fare: PassengerFareInfo
+    # fare: PassengerFareInfo # backend decides the fares, frontend only sends passenger details
     ssr: SsrSelection | None = None
     ssr_segments_outbound: list[SsrSelection | None] | None = None
     ssr_segments_inbound: list[SsrSelection | None] | None = None

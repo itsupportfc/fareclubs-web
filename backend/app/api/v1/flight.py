@@ -22,6 +22,7 @@ from app.schemas.tbo import (
 )
 from app.transformers.tbo_transformer import TBOTransformer
 from app.utils.cache import get_flight_cache
+from app.utils.money import divide_money, money_to_float, rupees_to_paise, to_money
 from fastapi import (
     APIRouter,
     Depends,
@@ -122,23 +123,33 @@ async def get_fare_rules(
 
 
 def _extract_per_passenger_fares(itinerary) -> list[PerPassengerFare]:
-    """Divide TBO FareBreakdown aggregate fares by PassengerCount to get per-head."""
-    results = []
-    for fb in itinerary.FareBreakdown:
+    """Display-only per-head fare summary.
+
+    NOT used to build the TBO Book/Ticket request — that uses cached FareQuote.
+    """
+    fare = getattr(itinerary, "Fare", None)
+    fare_breakdown = getattr(itinerary, "FareBreakdown", None) or []
+    if not fare or not fare_breakdown:
+        return []
+
+    total_pax = sum((fb.PassengerCount or 0) for fb in fare_breakdown) or 1
+    published_per_head = divide_money(fare.PublishedFare, total_pax)
+
+    results: list[PerPassengerFare] = []
+    for fb in fare_breakdown:
         count = fb.PassengerCount or 1
+        base_per_head = divide_money(fb.BaseFare, count)
+        # Everything between BaseFare and PublishedFare ends up here, regardless
+        # of which TBO component it came from (Tax, YQTax, AdditionalTxnFeePub,
+        # PGCharge, OtherCharges, ServiceFee, ...). One number, one meaning.
+        taxes_and_surcharges = to_money(published_per_head - base_per_head)
         results.append(
             PerPassengerFare(
-                pax_type=fb.PassengerType,
-                currency=fb.Currency,
-                base_fare=round(fb.BaseFare / count, 2),
-                tax=round(fb.Tax / count, 2),
-                yq_tax=round(fb.YQTax / count, 2),
-                other_charges=0,
-                additional_txn_fee_ofrd=round(
-                    (fb.AdditionalTxnFeeOfrd or 0) / count, 2
-                ),
-                additional_txn_fee_pub=round((fb.AdditionalTxnFeePub or 0) / count, 2),
-                pg_charge=round((fb.PGCharge or 0) / count, 2),
+                pax_type=int(fb.PassengerType),
+                currency=fb.Currency or "INR",
+                base_fare=money_to_float(base_per_head),
+                taxes_and_surcharges=money_to_float(taxes_and_surcharges),
+                total_fare=money_to_float(published_per_head),
             )
         )
     return results
@@ -216,16 +227,36 @@ async def get_fare_quote(
         f"flags_{payload.fare_id_outbound}", flags_outbound.model_dump(), ttl=900
     )
 
-    # Cache verified total fare for price validation at order creation
-    verified_outbound_total = (
-        outbound_tbo_response.Response.Results.Fare.BaseFare
-        + outbound_tbo_response.Response.Results.Fare.Tax
+    # Cache the FULL TBO FareQuote response. This is the canonical fare data —
+    # anything downstream (Book/Ticket request, FareBreakdown per pax type, mini
+    # fare rules) reads from here instead of from frontend-supplied values.
+    await cache.set_model(
+        f"fare_quote_{payload.fare_id_outbound}", outbound_tbo_response, ttl=900
+    )
+    # Cache customer-payable amount as integer PAISE.
+    # PublishedFare is TBO's contract for "amount to charge the customer" — it
+    # already includes BaseFare + Tax + OtherCharges + ServiceFee. Storing as
+    # int paise eliminates float-drift in downstream comparisons and makes the
+    # Razorpay handoff a direct pass-through.
+    verified_outbound_paise = rupees_to_paise(
+        outbound_tbo_response.Response.Results.Fare.PublishedFare
     )
     await cache.set(
-        f"verified_price_{payload.fare_id_outbound}",
-        verified_outbound_total,
+        f"verified_price_paise_{payload.fare_id_outbound}",
+        verified_outbound_paise,
         ttl=900,
     )
+
+    # # Cache verified total fare for price validation at order creation
+    # verified_outbound_total = (
+    #     outbound_tbo_response.Response.Results.Fare.BaseFare
+    #     + outbound_tbo_response.Response.Results.Fare.Tax
+    # )
+    # await cache.set(
+    #     f"verified_price_{payload.fare_id_outbound}",
+    #     verified_outbound_total,
+    #     ttl=900,
+    # )
 
     per_pax_inbound: list[PerPassengerFare] = []
     flags_inbound = None
@@ -250,18 +281,17 @@ async def get_fare_quote(
             getattr(inbound_tbo_response.Response, "IsTimeChanged", False) or False
         )
         if payload.fare_id_inbound:
-            await cache.set(
-                f"flags_{payload.fare_id_inbound}",
-                flags_inbound.model_dump(),
+            await cache.set_model(
+                f"fare_quote_{payload.fare_id_inbound}",
+                inbound_tbo_response,
                 ttl=900,
             )
-            verified_inbound_total = (
-                inbound_tbo_response.Response.Results.Fare.BaseFare
-                + inbound_tbo_response.Response.Results.Fare.Tax
+            verified_inbound_paise = rupees_to_paise(
+                inbound_tbo_response.Response.Results.Fare.PublishedFare
             )
             await cache.set(
-                f"verified_price_{payload.fare_id_inbound}",
-                verified_inbound_total,
+                f"verified_price_paise_{payload.fare_id_inbound}",
+                verified_inbound_paise,
                 ttl=900,
             )
 
@@ -269,9 +299,8 @@ async def get_fare_quote(
     outbound_price_changed = False
     outbound_detail = None
     if outbound_tbo_response.Response.IsPriceChanged:
-        new_outbound_price = (
-            outbound_tbo_response.Response.Results.Fare.BaseFare
-            + outbound_tbo_response.Response.Results.Fare.Tax
+        new_outbound_price = float(
+            outbound_tbo_response.Response.Results.Fare.PublishedFare
         )
         if new_outbound_price >= payload.initial_price_outbound + 50:
             outbound_price_changed = True
@@ -285,9 +314,8 @@ async def get_fare_quote(
     inbound_detail = None
     if inbound_tbo_response and payload.initial_price_inbound is not None:
         if inbound_tbo_response.Response.IsPriceChanged:
-            new_inbound_price = (
-                inbound_tbo_response.Response.Results.Fare.BaseFare
-                + inbound_tbo_response.Response.Results.Fare.Tax
+            new_inbound_price = float(
+                inbound_tbo_response.Response.Results.Fare.PublishedFare
             )
             if new_inbound_price >= payload.initial_price_inbound + 50:
                 inbound_price_changed = True
