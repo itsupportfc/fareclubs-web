@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from app.api.v1 import airports, auth, flight, flight_booking
 from app.api.v1.dependencies import _tbo_client
 from app.clients.exceptions import ExternalProviderError
+from app.core.exceptions import SsrValidationError
 from app.core.http_logging import RequestIdMiddleware
 from app.core.logging import setup_logging
 from app.core.response_logging import ResponseLoggingMiddleware
@@ -62,6 +63,25 @@ async def rate_limit_handler(request, exc):
     return JSONResponse(
         status_code=status.HTTP_429_TOO_MANY_REQUESTS,
         content={"detail": "Rate limit exceeded. Please try again later."},
+    )
+
+
+@app.exception_handler(SsrValidationError)
+async def ssr_validation_exception_handler(request, exc: SsrValidationError):
+    """Convert SsrValidationError raised inside booking-time transformers
+    (after order-creation validation has already passed) into 422 with the
+    same structured shape used at order-creation time. This is the
+    defense-in-depth layer that catches cache rotations between validate()
+    and the TBO Book/Ticket call."""
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={
+            "detail": {
+                "code": "SSR_INVALID",
+                "message": "Some add-ons are no longer available.",
+                "missing": exc.missing,
+            },
+        },
     )
 
 

@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
 import { fetchWithTimeout } from "../../utils/http";
+import { APIError } from "./flight";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "/api/v1";
 
@@ -76,8 +77,16 @@ export function useRazorpayBooking(token) {
 
                 if (!orderRes.ok) {
                     const err = await orderRes.json();
-                    throw new Error(
-                        err?.detail || "Failed to create payment order",
+                    const detail = err?.detail;
+                    const isStructured = detail && typeof detail === "object";
+                    throw new APIError(
+                        (isStructured ? detail.message : detail) ||
+                            "Failed to create payment order",
+                        {
+                            status: orderRes.status,
+                            code: isStructured ? detail.code : null,
+                            detail: isStructured ? detail : null,
+                        },
                     );
                 }
 

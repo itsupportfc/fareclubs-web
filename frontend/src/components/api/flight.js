@@ -1,5 +1,28 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api/v1";
 
+/** Custom error preserving backend's structured detail (code, missing, etc.). */
+export class APIError extends Error {
+    constructor(message, { status, code, detail } = {}) {
+        super(message);
+        this.name = "APIError";
+        this.status = status;
+        this.code = code; // e.g. "SSR_INVALID"
+        this.detail = detail; // full backend payload for downstream consumers
+    }
+}
+
+function readDetail(data) {
+    // Backend returns either { detail: "string" } or { detail: { code, message, ... } }
+    if (!data?.detail) return { message: null, code: null, full: null };
+    if (typeof data.detail === "string")
+        return { message: data.detail, code: null, full: null };
+    return {
+        message: data.detail.message || null,
+        code: data.detail.code || null,
+        full: data.detail,
+    };
+}
+
 export async function searchFlightsAPI(payload, signal) {
     const body = {
         tripType: payload.tripType,
@@ -109,7 +132,12 @@ export async function getSSRAPI(payload, signal) {
     const data = await response.json();
 
     if (!response.ok) {
-        throw new Error(data?.detail || "SSR API failed");
+        const { message, code, full } = readDetail(data);
+        throw new APIError(message || "SSR API failed", {
+            status: response.status,
+            code,
+            detail: full,
+        });
     }
 
     return data;

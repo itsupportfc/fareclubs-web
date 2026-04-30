@@ -20,6 +20,7 @@ import httpx
 from app.clients.exceptions import ExternalProviderError
 from app.clients.tbo_client import TBOClient, TBOParseError
 from app.config import settings
+from app.core.exceptions import SsrExpiredError, SsrValidationError
 from app.db.models.user import User
 from app.domain.booking_enums import (
     SUCCESS_TICKET_STATUSES,
@@ -40,12 +41,14 @@ from app.schemas.internal.booking import (
     SsrSelection,
 )
 from app.schemas.tbo import (
+    TBOFareQuoteResponse,
     TBOGetBookingDetailsResponse,
     TBOTicketNonLCCRequest,
     TBOTicketResponse,
 )
 from app.schemas.tbo.ssr import TBOSSRResponse
 from app.services.booking_service import BookingService
+from app.services.ssr_validation_service import SsrValidationService
 from app.transformers.booking_transformer import (
     BookingConfirmationTransformer,
     BookingLegTransformResult,
@@ -53,6 +56,7 @@ from app.transformers.booking_transformer import (
 from app.transformers.tbo_transformer import TBOTransformer
 from app.utils import razorpay_utils
 from app.utils.cache import FlightCache
+from app.utils.money import paise_to_rupees, rupees_to_paise
 from app.utils.email import (
     build_booking_attention_email,
     build_booking_failure_email,
@@ -71,6 +75,7 @@ class LegWorkItem:
     is_lcc: bool
     cached_fare: dict
     raw_ssr: TBOSSRResponse | None
+    fare_quote: TBOFareQuoteResponse
 
 
 @dataclass
@@ -107,12 +112,14 @@ class BookingCheckoutService:
         request_transformer: TBOTransformer,
         response_transformer: BookingConfirmationTransformer,
         booking_service: BookingService,
+        ssr_validator: SsrValidationService | None = None,
     ):
         self.cache = cache
         self.client = client
         self.request_transformer = request_transformer
         self.response_transformer = response_transformer
         self.booking_service = booking_service
+        self.ssr_validator = ssr_validator or SsrValidationService(cache)
 
     @staticmethod
     def _is_price_changed(response: TBOTicketResponse) -> bool:
@@ -139,21 +146,51 @@ class BookingCheckoutService:
         )
         # check cache => validate payment amount => return Razorpay order details
         await self._require_cached_fare(payload.fare_id_outbound)
-        verified_total_amount = await self._compute_verified_total_amount(
+        # FAIL CLOSED: never charge a customer for a SSR mix we can't book.
+        try:
+            await self.ssr_validator.validate(
+                fare_id_outbound=payload.fare_id_outbound,
+                fare_id_inbound=payload.fare_id_inbound,
+                ssr_selections_outbound=payload.ssr_selections_outbound or [],
+                ssr_selections_inbound=payload.ssr_selections_inbound or [],
+                journey_ssr_outbound=payload.journey_ssr_outbound or [],
+                journey_ssr_inbound=payload.journey_ssr_inbound or [],
+                is_international_return=payload.is_international_return,
+            )
+        except SsrExpiredError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_410_GONE,
+                detail={
+                    "code": "SSR_EXPIRED",
+                    "message": "Add-ons expired. Please re-confirm your selections.",
+                },
+            ) from exc
+        except SsrValidationError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail={
+                    "code": "SSR_INVALID",
+                    "message": "Some add-ons are no longer available.",
+                    "missing": exc.missing,
+                },
+            ) from exc
+        verified_total_paise = await self._compute_verified_total_paise(
             fare_id_outbound=payload.fare_id_outbound,
             fare_id_inbound=payload.fare_id_inbound,
             ssr_selections_outbound=payload.ssr_selections_outbound,
             ssr_selections_inbound=payload.ssr_selections_inbound,
+            journey_ssr_outbound=payload.journey_ssr_outbound,
+            journey_ssr_inbound=payload.journey_ssr_inbound,
             is_international_return=payload.is_international_return,
         )
-        self._validate_client_total_amount(
+        self._validate_client_total_paise(
             client_total_amount=payload.client_total_amount,
-            verified_total_amount=verified_total_amount,
+            verified_total_paise=verified_total_paise,
         )
 
         try:
             razorpay_order = razorpay_utils.create_order(
-                amount_paise=int(round(verified_total_amount, 2) * 100),
+                amount_paise=verified_total_paise,
                 receipt=payload.fare_id_outbound,
             )
         except Exception as exc:
@@ -168,7 +205,7 @@ class BookingCheckoutService:
             payment_amount_paise=razorpay_order["amount"],
             payment_currency=razorpay_order["currency"],
             razorpay_public_key=settings.RAZORPAY_KEY_ID,
-            verified_total_amount=round(verified_total_amount, 2),
+            verified_total_amount=paise_to_rupees(verified_total_paise),
         )
 
     async def confirm_booking(
@@ -197,16 +234,20 @@ class BookingCheckoutService:
         ssr_inbound = [
             sel for p in payload.passengers for sel in (p.ssr_segments_inbound or [])
         ]
-        verified_total_amount = await self._compute_verified_total_amount(
+        journey_outbound = [p.journey_ssr_outbound for p in payload.passengers]
+        journey_inbound = [p.journey_ssr_inbound for p in payload.passengers]
+        verified_total_paise = await self._compute_verified_total_paise(
             fare_id_outbound=payload.fare_id_outbound,
             fare_id_inbound=payload.fare_id_inbound,
             ssr_selections_outbound=ssr_outbound,
             ssr_selections_inbound=ssr_inbound,
+            journey_ssr_outbound=journey_outbound,
+            journey_ssr_inbound=journey_inbound,
             is_international_return=payload.is_international_return,
         )
-        self._validate_client_total_amount(
+        self._validate_client_total_paise(
             client_total_amount=payload.client_total_amount,
-            verified_total_amount=verified_total_amount,
+            verified_total_paise=verified_total_paise,
         )
 
         self._verify_payment_signature(payload)
@@ -221,7 +262,7 @@ class BookingCheckoutService:
             razorpay_order_id=payload.payment_order_id,
             razorpay_payment_id=payload.payment_id,
             razorpay_signature=payload.payment_signature,
-            amount_paise=int(round(verified_total_amount, 2) * 100),
+            amount_paise=verified_total_paise,
         )
 
         if not was_created:
@@ -337,12 +378,15 @@ class BookingCheckoutService:
                 detail="Seat and meal options for the outbound flight expired. Please refresh SSR and try again.",
             )
 
+        outbound_fare_quote = await self._require_fare_quote(payload.fare_id_outbound)
+
         work_items = [
             LegWorkItem(
                 direction=LegDirection.OUTBOUND,
                 is_lcc=outbound_is_lcc,
                 cached_fare=outbound_cached_fare,
                 raw_ssr=outbound_raw_ssr,
+                fare_quote=outbound_fare_quote,
             )
         ]
 
@@ -365,12 +409,15 @@ class BookingCheckoutService:
                 detail="Seat and meal options for the return flight expired. Please refresh SSR and try again.",
             )
 
+        inbound_fare_quote = await self._require_fare_quote(payload.fare_id_inbound)
+
         work_items.append(
             LegWorkItem(
                 direction=LegDirection.INBOUND,
                 is_lcc=inbound_is_lcc,
                 cached_fare=inbound_cached_fare,
                 raw_ssr=inbound_raw_ssr,
+                fare_quote=inbound_fare_quote,
             )
         )
         return work_items
@@ -463,6 +510,7 @@ class BookingCheckoutService:
                 end_user_ip=end_user_ip,
                 raw_ssr=item.raw_ssr,
                 direction=item.direction.value,
+                fare_quote=item.fare_quote,
             )
             response = await self.client.generate_ticket_lcc(lcc_request)
             if self._is_price_changed(response):
@@ -482,6 +530,7 @@ class BookingCheckoutService:
             end_user_ip=end_user_ip,
             raw_ssr=item.raw_ssr,
             direction=item.direction.value,
+            fare_quote=item.fare_quote,
         )
         book_response = await self.client.book_flight(book_request)
         book_inner = book_response.Response.Response
@@ -813,15 +862,38 @@ class BookingCheckoutService:
             )
         return cached_fare
 
-    def _compute_ssr_total_for_direction(
+    async def _require_fare_quote(self, fare_id: str | None) -> TBOFareQuoteResponse:
+        """Load the cached FareQuote required to build provider passenger fares.
+
+        Any cache-miss on a TBO TraceId-bound key means the session is no longer
+        recoverable — the user must re-search. We use the same 410 detail string
+        as `_require_cached_fare` so the frontend's existing "session has expired"
+        handler routes the user to /search without any new error-routing logic.
+        """
+        if not fare_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Missing fare ID.",
+            )
+        fare_quote = await self.cache.get_model(
+            f"fare_quote_{fare_id}", TBOFareQuoteResponse
+        )
+        if fare_quote is None:
+            raise HTTPException(
+                status_code=status.HTTP_410_GONE,
+                detail="Your session has expired. Please search again to get updated fares.",
+            )
+        return fare_quote
+
+    def _compute_ssr_total_paise_for_direction(
         self,
         *,
         raw_ssr: TBOSSRResponse | None,
         selections: list["SsrSelection | None"] | None,
         leg_index: int,
         is_international_return: bool,
-    ) -> float:
-        """Sum the price of all SSR codes selected for one direction.
+    ) -> int:
+        """Sum the price of all SSR codes selected for one direction (in paise).
 
         `selections` is a flat list (already flattened across passengers and
         segments — order doesn't matter for summation).
@@ -830,12 +902,12 @@ class BookingCheckoutService:
         - International round-trip: both directions share the outbound raw_ssr cache;
           `leg_index=0` reads outbound blocks, `leg_index=1` reads inbound blocks.
 
-        Missing codes (stale cache, code typo) are logged and skipped — we never
-        raise from here, because letting a single mismatched code 500 the whole
-        checkout would be worse than overcharging by ₹0.
+        Returns int paise to keep arithmetic exact across many add-ons.
+        Missing codes are logged and skipped — Issue 6 will tighten this to
+        raise once SSR validation runs first.
         """
         if not selections or not raw_ssr or not raw_ssr.Response:
-            return 0.0
+            return 0
 
         response = raw_ssr.Response
 
@@ -846,7 +918,7 @@ class BookingCheckoutService:
                 return [blocks[leg_index]] if leg_index < len(blocks) else []
             return list(blocks)
 
-        seat_price_by_code: dict[str, float] = {}
+        seat_price_paise_by_code: dict[str, int] = {}
         for sd in _pick_blocks(response.SeatDynamic):
             if not sd or not sd.SegmentSeat:
                 continue
@@ -856,28 +928,30 @@ class BookingCheckoutService:
                 for row in seg.RowSeats:
                     for seat in row.Seats or []:
                         if seat.Code and seat.Code != "NoSeat":
-                            seat_price_by_code[seat.Code] = float(seat.Price or 0)
+                            seat_price_paise_by_code[seat.Code] = rupees_to_paise(
+                                seat.Price
+                            )
 
-        baggage_price_by_code: dict[str, float] = {}
+        baggage_price_paise_by_code: dict[str, int] = {}
         for block in _pick_blocks(response.Baggage):
             for b in block or []:
                 if b.Code:
-                    baggage_price_by_code[b.Code] = float(b.Price or 0)
+                    baggage_price_paise_by_code[b.Code] = rupees_to_paise(b.Price)
 
         # MealDynamic = LCC priced meals. Non-LCC `Meal` (SimpleMeal) has no
         # Price field, so non-LCC meals cost ₹0 and are not added.
-        meal_price_by_code: dict[str, float] = {}
+        meal_price_paise_by_code: dict[str, int] = {}
         for block in _pick_blocks(response.MealDynamic):
             for m in block or []:
                 if m.Code:
-                    meal_price_by_code[m.Code] = float(m.Price or 0)
+                    meal_price_paise_by_code[m.Code] = rupees_to_paise(m.Price)
 
-        total = 0.0
+        total_paise = 0
         for sel in selections:
             if sel is None:
                 continue
             if sel.meal_code:
-                price = meal_price_by_code.get(sel.meal_code)
+                price = meal_price_paise_by_code.get(sel.meal_code)
                 if price is None:
                     logger.warning(
                         "SSR pricing: meal_code=%s not found in cached SSR (leg_index=%d) — skipping",
@@ -885,9 +959,9 @@ class BookingCheckoutService:
                         leg_index,
                     )
                 else:
-                    total += price
+                    total_paise += price
             if sel.baggage_code:
-                price = baggage_price_by_code.get(sel.baggage_code)
+                price = baggage_price_paise_by_code.get(sel.baggage_code)
                 if price is None:
                     logger.warning(
                         "SSR pricing: baggage_code=%s not found in cached SSR (leg_index=%d) — skipping",
@@ -895,9 +969,9 @@ class BookingCheckoutService:
                         leg_index,
                     )
                 else:
-                    total += price
+                    total_paise += price
             if sel.seat_code:
-                price = seat_price_by_code.get(sel.seat_code)
+                price = seat_price_paise_by_code.get(sel.seat_code)
                 if price is None:
                     logger.warning(
                         "SSR pricing: seat_code=%s not found in cached SSR (leg_index=%d) — skipping",
@@ -905,39 +979,52 @@ class BookingCheckoutService:
                         leg_index,
                     )
                 else:
-                    total += price
-        return total
+                    total_paise += price
+        return total_paise
 
-    async def _compute_verified_total_amount(
+    async def _compute_verified_total_paise(
         self,
         *,
         fare_id_outbound: str,
         fare_id_inbound: str | None,
         ssr_selections_outbound: list["SsrSelection | None"] | None = None,
         ssr_selections_inbound: list["SsrSelection | None"] | None = None,
+        journey_ssr_outbound: list["SsrSelection | None"] | None = None,
+        journey_ssr_inbound: list["SsrSelection | None"] | None = None,
         is_international_return: bool = False,
-    ) -> float:
-        # we set this during FareQuote response processing
-        verified_outbound_amount = await self.cache.get(
-            f"verified_price_{fare_id_outbound}"
+    ) -> int:
+        """Compute the total amount the customer pays, in integer paise.
+
+        Reads `verified_price_paise_{fare_id}` (cached at fare-quote time from
+        `Fare.PublishedFare`) and adds SSR totals (also paise). int + int is
+        exact — no float drift can sneak into the Razorpay handoff.
+
+        SSR has TWO selection layers:
+        - per-segment: `ssr_selections_*` (one entry per pax × segment), used
+          for seat / segment-meal / segment-baggage prices.
+        - journey-level: `journey_ssr_*` (one entry per pax), used for
+          full-journey baggage / meal prices that apply once over the trip.
+        """
+        verified_outbound_paise = await self.cache.get(
+            f"verified_price_paise_{fare_id_outbound}"
         )
-        if verified_outbound_amount is None:
+        if verified_outbound_paise is None:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Fare quote must be completed before checkout.",
             )
 
-        verified_total_amount = float(verified_outbound_amount)
+        verified_total_paise = int(verified_outbound_paise)
         if fare_id_inbound:
-            verified_inbound_amount = await self.cache.get(
-                f"verified_price_{fare_id_inbound}"
+            verified_inbound_paise = await self.cache.get(
+                f"verified_price_paise_{fare_id_inbound}"
             )
-            if verified_inbound_amount is None:
+            if verified_inbound_paise is None:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Inbound fare quote must be completed before checkout.",
                 )
-            verified_total_amount += float(verified_inbound_amount)
+            verified_total_paise += int(verified_inbound_paise)
 
         has_outbound_ssr = bool(ssr_selections_outbound) and any(
             s is not None for s in ssr_selections_outbound
@@ -945,28 +1032,47 @@ class BookingCheckoutService:
         has_inbound_ssr = bool(ssr_selections_inbound) and any(
             s is not None for s in ssr_selections_inbound
         )
+        has_outbound_journey = bool(journey_ssr_outbound) and any(
+            s is not None for s in journey_ssr_outbound
+        )
+        has_inbound_journey = bool(journey_ssr_inbound) and any(
+            s is not None for s in journey_ssr_inbound
+        )
+        needs_outbound_cache = (
+            has_outbound_ssr
+            or has_outbound_journey
+            or ((has_inbound_ssr or has_inbound_journey) and is_international_return)
+        )
+        needs_inbound_cache = (
+            has_inbound_ssr or has_inbound_journey
+        ) and not is_international_return
 
-        if has_outbound_ssr or has_inbound_ssr:
+        if needs_outbound_cache or needs_inbound_cache:
             outbound_raw_ssr = await self.cache.get_model(
                 f"raw_ssr_{fare_id_outbound}", TBOSSRResponse
             )
-            if (
-                has_outbound_ssr or (has_inbound_ssr and is_international_return)
-            ) and outbound_raw_ssr is None:
+            if needs_outbound_cache and outbound_raw_ssr is None:
                 raise HTTPException(
                     status_code=status.HTTP_410_GONE,
                     detail="Your session has expired. Please search again to get updated fares.",
                 )
 
             if has_outbound_ssr:
-                verified_total_amount += self._compute_ssr_total_for_direction(
+                verified_total_paise += self._compute_ssr_total_paise_for_direction(
                     raw_ssr=outbound_raw_ssr,
                     selections=ssr_selections_outbound,
                     leg_index=0,
                     is_international_return=is_international_return,
                 )
+            if has_outbound_journey:
+                verified_total_paise += self._compute_ssr_total_paise_for_direction(
+                    raw_ssr=outbound_raw_ssr,
+                    selections=journey_ssr_outbound,
+                    leg_index=0,
+                    is_international_return=is_international_return,
+                )
 
-            if has_inbound_ssr:
+            if has_inbound_ssr or has_inbound_journey:
                 if is_international_return:
                     inbound_raw_ssr = outbound_raw_ssr
                 else:
@@ -983,36 +1089,45 @@ class BookingCheckoutService:
                             status_code=status.HTTP_410_GONE,
                             detail="Your session has expired. Please search again to get updated fares.",
                         )
-                verified_total_amount += self._compute_ssr_total_for_direction(
-                    raw_ssr=inbound_raw_ssr,
-                    selections=ssr_selections_inbound,
-                    leg_index=1 if is_international_return else 0,
-                    is_international_return=is_international_return,
-                )
+                if has_inbound_ssr:
+                    verified_total_paise += self._compute_ssr_total_paise_for_direction(
+                        raw_ssr=inbound_raw_ssr,
+                        selections=ssr_selections_inbound,
+                        leg_index=1 if is_international_return else 0,
+                        is_international_return=is_international_return,
+                    )
+                if has_inbound_journey:
+                    verified_total_paise += self._compute_ssr_total_paise_for_direction(
+                        raw_ssr=inbound_raw_ssr,
+                        selections=journey_ssr_inbound,
+                        leg_index=1 if is_international_return else 0,
+                        is_international_return=is_international_return,
+                    )
 
-        return verified_total_amount
+        return verified_total_paise
 
-    def _validate_client_total_amount(
+    def _validate_client_total_paise(
         self,
         *,
         client_total_amount: float,
-        verified_total_amount: float,
+        verified_total_paise: int,
     ) -> None:
-        submitted = round(client_total_amount, 2)
-        expected = round(verified_total_amount, 2)
-        # Allow max 10 rupees difference (floating-point rounding tolerance only)
-        if abs(submitted - expected) > 10:
+        """Compare client-supplied rupees to verified paise. Tolerance: ₹10."""
+        client_total_paise = rupees_to_paise(client_total_amount)
+        # ₹10 tolerance = 1000 paise. Same UX threshold, expressed in paise.
+        if abs(client_total_paise - verified_total_paise) > 1000:
+            verified_rupees = paise_to_rupees(verified_total_paise)
             logger.warning(
-                "Amount mismatch: submitted=%.2f, expected=%.2f, diff=%.2f",
-                submitted,
-                expected,
-                submitted - expected,
+                "Amount mismatch: submitted=%.2f, expected=%.2f, diff_paise=%d",
+                client_total_amount,
+                verified_rupees,
+                client_total_paise - verified_total_paise,
             )
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=(
-                    f"Amount mismatch: submitted ₹{submitted}, expected ₹{expected}. "
-                    "Please refresh fares."
+                    f"Amount mismatch: submitted ₹{client_total_amount:.2f}, "
+                    f"expected ₹{verified_rupees:.2f}. Please refresh fares."
                 ),
             )
 

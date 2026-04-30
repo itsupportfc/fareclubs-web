@@ -25,6 +25,7 @@ from app.schemas.internal.booking import (
 )
 from app.schemas.tbo.booking_details import TBOGetBookingDetailsResponse
 from app.schemas.tbo.ticket import TBOTicketResponse
+from app.transformers._fare_breakdown import build_fare_breakdown
 from pydantic import ValidationError
 
 logger = logging.getLogger(__name__)
@@ -238,25 +239,7 @@ class BookingConfirmationTransformer:
         return segment_baggage or None
 
     def _extract_fare_breakdown(self, itinerary) -> FareBreakdownInfo | None:
-        fare = getattr(itinerary, "Fare", None)
-        if fare is None:
-            return None
-        tax_breakup = None
-        if fare.TaxBreakup:
-            tax_breakup = [
-                {"key": item.key, "value": item.value} for item in fare.TaxBreakup
-            ]
-        return FareBreakdownInfo(
-            currency=fare.Currency or "INR",
-            base_fare=fare.BaseFare or 0,
-            tax=fare.Tax or 0,
-            total_fare=(
-                fare.PublishedFare
-                if fare.PublishedFare is not None
-                else (fare.BaseFare or 0) + (fare.Tax or 0)
-            ),
-            tax_breakup=tax_breakup,
-        )
+        return build_fare_breakdown(getattr(itinerary, "Fare", None))
 
     def _extract_mini_fare_rules(self, itinerary) -> list[MiniFareRuleInfo] | None:
         mini_fare_rules: list[MiniFareRuleInfo] = []

@@ -174,10 +174,6 @@ export default function ReturnFareModal({
                               fareQuote: quoteResponse?.inbound || null,
                           },
                     passengers: { adults, children, infants },
-                    perPassengerFaresOutbound:
-                        quoteResponse?.perPassengerFaresOutbound || [],
-                    perPassengerFaresInbound:
-                        quoteResponse?.perPassengerFaresInbound || [],
                     fareQuoteFlagsOutbound:
                         quoteResponse?.flagsOutbound || null,
                     fareQuoteFlagsInbound: quoteResponse?.flagsInbound || null,

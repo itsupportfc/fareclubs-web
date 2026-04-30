@@ -20,9 +20,11 @@ from app.schemas.tbo import (
     TBOFareRuleRequest,
     TBOSSRRequest,
 )
+from app.schemas.tbo.ssr import TBOSSRResponse
 from app.transformers.tbo_transformer import TBOTransformer
 from app.utils.cache import get_flight_cache
 from app.utils.money import divide_money, money_to_float, rupees_to_paise, to_money
+from app.utils.single_flight import ssr_single_flight
 from fastapi import (
     APIRouter,
     Depends,
@@ -247,17 +249,6 @@ async def get_fare_quote(
         ttl=900,
     )
 
-    # # Cache verified total fare for price validation at order creation
-    # verified_outbound_total = (
-    #     outbound_tbo_response.Response.Results.Fare.BaseFare
-    #     + outbound_tbo_response.Response.Results.Fare.Tax
-    # )
-    # await cache.set(
-    #     f"verified_price_{payload.fare_id_outbound}",
-    #     verified_outbound_total,
-    #     ttl=900,
-    # )
-
     per_pax_inbound: list[PerPassengerFare] = []
     flags_inbound = None
     is_time_changed_inbound = False
@@ -281,6 +272,11 @@ async def get_fare_quote(
             getattr(inbound_tbo_response.Response, "IsTimeChanged", False) or False
         )
         if payload.fare_id_inbound:
+            await cache.set(
+                f"flags_{payload.fare_id_inbound}",
+                flags_inbound.model_dump(),
+                ttl=900,
+            )
             await cache.set_model(
                 f"fare_quote_{payload.fare_id_inbound}",
                 inbound_tbo_response,
@@ -375,6 +371,33 @@ async def get_ssr_details(
     is_lcc_outbound = outbound_provider_ref.get("IsLCC", False)
     is_lcc_inbound = False
 
+    async def _fetch_ssr_with_cache(
+        fare_id: str, req: TBOSSRRequest
+    ) -> TBOSSRResponse:
+        """Cache-lookup-first + single-flight fetch.
+
+        - Hit Redis first; on cache hit, no TBO call.
+        - On cache miss, SingleFlight collapses N concurrent misses into one
+          TBO call. The result is cached so future readers also get the hit.
+        """
+        cached = await cache.get_model(f"raw_ssr_{fare_id}", TBOSSRResponse)
+        if cached is not None:
+            return cached
+
+        async def _factory() -> TBOSSRResponse:
+            # Re-check under SingleFlight ownership: another caller may have
+            # populated the cache while we waited.
+            inner_cached = await cache.get_model(
+                f"raw_ssr_{fare_id}", TBOSSRResponse
+            )
+            if inner_cached is not None:
+                return inner_cached
+            resp = await client.get_ssr(req)
+            await cache.set_model(f"raw_ssr_{fare_id}", resp)
+            return resp
+
+        return await ssr_single_flight.do(f"ssr:{fare_id}", _factory)
+
     tasks = []
     out_req = TBOSSRRequest(
         EndUserIp=end_user_ip,
@@ -382,7 +405,7 @@ async def get_ssr_details(
         TraceId=outbound_provider_ref["TraceId"],
         ResultIndex=outbound_provider_ref["ResultIndex"],
     )
-    tasks.append(client.get_ssr(out_req))
+    tasks.append(_fetch_ssr_with_cache(payload.fare_id_outbound, out_req))
 
     if payload.trip_type == "roundtrip" and not payload.is_international_return:
         inbound_provider_ref = await cache.get(payload.fare_id_inbound)
@@ -398,15 +421,12 @@ async def get_ssr_details(
             TraceId=inbound_provider_ref["TraceId"],
             ResultIndex=inbound_provider_ref["ResultIndex"],
         )
-        tasks.append(client.get_ssr(in_req))
+        tasks.append(_fetch_ssr_with_cache(payload.fare_id_inbound, in_req))
 
     try:
         tbo_responses = await asyncio.gather(*tasks)
         outbound_ssr_response = tbo_responses[0]
-        # Store as Pydantic model for correct round-trip serialization
-        await cache.set_model(
-            f"raw_ssr_{payload.fare_id_outbound}", outbound_ssr_response
-        )
+        # _fetch_ssr_with_cache already wrote to Redis on miss; no extra cache.set here.
 
         if payload.is_international_return:
             if is_lcc_outbound:  # in this case inbound is also LCC, since it's the same fare with linked fares
@@ -478,9 +498,7 @@ async def get_ssr_details(
             inbound_view = None
             if len(tbo_responses) > 1:
                 inbound_ssr_response = tbo_responses[1]
-                await cache.set_model(
-                    f"raw_ssr_{payload.fare_id_inbound}", inbound_ssr_response
-                )
+                # _fetch_ssr_with_cache already cached on miss.
 
                 if is_lcc_inbound:
                     inbound_view = transformer.transform_lcc_ssr_response(
@@ -507,13 +525,18 @@ async def get_ssr_details(
 
         return SsrResponse(outbound=outbound_view, inbound=inbound_view)
     except ExternalProviderError as e:
-        # TBO doesn't support SSR for this flight — return empty options
+        # SSR provider degraded — surface as 503 so the frontend can show
+        # "Add-ons temporarily unavailable, retry" instead of an empty UI
+        # that lets the user proceed without seats/baggage they meant to buy.
         logger.warning(
-            "SSR unavailable for fare_id=%s: %s",
+            "SSR provider error for fare_id=%s: %s",
             payload.fare_id_outbound,
             e.message,
         )
-        return SsrResponse(outbound=None, inbound=None)
-    # this is silently swallowing all the errors
-    # except (ExternalProviderError, Exception):
-    #     return SsrResponse(outbound=None, inbound=None)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "code": "SSR_PROVIDER_DOWN",
+                "message": "Add-ons are temporarily unavailable. Please retry.",
+            },
+        ) from e

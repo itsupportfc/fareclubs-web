@@ -77,10 +77,15 @@ class PassengerInfo(InternalBaseSchema):
     pan: str | None = None
     gst: GstInfo | None = None
 
-    # fare: PassengerFareInfo # backend decides the fares, frontend only sends passenger details
+    # No `fare` block: backend reads from cached FareQuote and builds the
+    # provider PassengerFare server-side. Frontend never sends fare components.
     ssr: SsrSelection | None = None
     ssr_segments_outbound: list[SsrSelection | None] | None = None
     ssr_segments_inbound: list[SsrSelection | None] | None = None
+    # Journey-level SSR (one per direction, not per segment). Used by booking
+    # transformers to attach trip-wide Baggage / Meal entries to the TBO request.
+    journey_ssr_outbound: SsrSelection | None = None
+    journey_ssr_inbound: SsrSelection | None = None
 
     @model_validator(mode="after")
     def normalize_legacy_ssr_field(self):
@@ -109,6 +114,13 @@ class BookingCreateOrderRequest(InternalBaseSchema):
     # server-side so the Razorpay order amount equals fare + tax + SSR.
     ssr_selections_outbound: list[SsrSelection | None] | None = None
     ssr_selections_inbound: list[SsrSelection | None] | None = None
+
+    # Journey-level (full-trip) SSR selections — one per passenger, NOT per
+    # segment. Journey baggage / journey meal apply once over the whole trip.
+    # Each `SsrSelection` here uses only `meal_code` and `baggage_code`;
+    # `seat_code` is ignored at the journey level (seats are always per-segment).
+    journey_ssr_outbound: list[SsrSelection | None] | None = None
+    journey_ssr_inbound: list[SsrSelection | None] | None = None
 
 
 class BookingCreateOrderResponse(InternalBaseSchema):
@@ -158,9 +170,14 @@ class SegmentBaggageInfo(InternalBaseSchema):
 class FareBreakdownInfo(InternalBaseSchema):
     currency: str = "INR"
     base_fare: float
-    tax: float
-    total_fare: float
-    tax_breakup: list[dict] | None = None
+    taxes_and_surcharges: float
+    gst: float | None = None  # K3 line, for B2B invoice display
+    seat_charges: float = 0.0
+    meal_charges: float = 0.0
+    baggage_charges: float = 0.0
+    special_service_charges: float = 0.0
+    other_charges: float = 0.0  # convenience charge etc., baked into PublishedFare
+    total_fare: float  # = PublishedFare (canonical total)
 
 
 class MiniFareRuleInfo(InternalBaseSchema):

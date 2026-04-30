@@ -1,15 +1,18 @@
 import hashlib
+import secrets
 import uuid
 from datetime import datetime
 from typing import Optional, cast
 
 from app.clients.exceptions import ExternalProviderError
+from app.core.exceptions import SsrValidationError
 from app.schemas.internal.booking import (
     BookingConfirmRequest,
     BookingConfirmResponse,
     ConfirmPassengerInfo,
     FareBreakdownInfo,
     MiniFareRuleInfo,
+    PassengerFareInfo,
     SegmentBaggageInfo,
 )
 from app.schemas.internal.fare_quote import FareQuoteResponse
@@ -75,7 +78,9 @@ from app.schemas.tbo.ticket import (
     TBOTicketResponse,
     TicketPassengerRequest,
 )
+from app.transformers._fare_breakdown import build_fare_breakdown
 from app.utils.cache import FlightCache
+from app.utils.money import divide_money, money_to_float
 
 # MAPPINGS
 CABIN_CLASS_MAP: dict[int, CabinClass] = {
@@ -166,6 +171,8 @@ class TBOTransformer:
         seat_options: Optional[SeatDynamic],
     ) -> NonLccSsrView:
         segment_map: dict[str, NonLccSegmentSsrView] = {}
+        # Full-journey items live at trip level — deduped by code.
+        journey_baggage: dict[str, BaggageOptions] = {}
 
         # SEAT
         if seat_options and seat_options.SegmentSeat:
@@ -200,8 +207,19 @@ class TBOTransformer:
                     if rows.Seats
                 ]
 
-        # BAGGAGE
+        # BAGGAGE — split into journey-level (WayType=2) vs segment-specific.
         for b in baggage_options or []:
+            if b.WayType == 2:
+                journey_baggage.setdefault(
+                    b.Code,
+                    BaggageOptions(
+                        code=b.Code,
+                        weight=b.Weight,
+                        price=b.Price,
+                        for_full_journey=True,
+                    ),
+                )
+                continue
             key = f"{b.FlightNumber}_{b.Origin}"
             if key not in segment_map:
                 segment_map[key] = NonLccSegmentSsrView(
@@ -214,7 +232,7 @@ class TBOTransformer:
                     code=b.Code,
                     weight=b.Weight,
                     price=b.Price,
-                    for_full_journey=b.WayType == 2,
+                    for_full_journey=False,
                 )
             )
 
@@ -225,6 +243,7 @@ class TBOTransformer:
         ]
 
         return NonLccSsrView(
+            journey_baggage=list(journey_baggage.values()),
             segments=list(segment_map.values()),
             meal_preferences=meal_prefs,
         )
@@ -236,6 +255,9 @@ class TBOTransformer:
         seat_options: Optional[SeatDynamic],
     ) -> LccSsrView:
         segment_map: dict[str, LccSegmentSsrView] = {}
+        # Full-journey items live at trip level — deduped by code.
+        journey_baggage: dict[str, BaggageOptions] = {}
+        journey_meals: dict[str, LccMealOptions] = {}
 
         # SEAT
         if seat_options and seat_options.SegmentSeat:
@@ -270,8 +292,19 @@ class TBOTransformer:
                     if rows.Seats
                 ]
 
-        # BAGGAGE
+        # BAGGAGE — split into journey-level (WayType=2) vs segment-specific.
         for b in baggage_options or []:
+            if b.WayType == 2:
+                journey_baggage.setdefault(
+                    b.Code,
+                    BaggageOptions(
+                        code=b.Code,
+                        weight=b.Weight,
+                        price=b.Price,
+                        for_full_journey=True,
+                    ),
+                )
+                continue
             key = f"{b.FlightNumber}_{b.Origin}"
             if key not in segment_map:
                 segment_map[key] = LccSegmentSsrView(
@@ -284,13 +317,24 @@ class TBOTransformer:
                     code=b.Code,
                     weight=b.Weight,
                     price=b.Price,
-                    for_full_journey=b.WayType == 2,
+                    for_full_journey=False,
                 )
             )
 
-        # MEAL
+        # MEAL — same split.
         for m in meal_options or []:
             if m.Code == "NoMeal":
+                continue
+            if m.WayType == 2:
+                journey_meals.setdefault(
+                    m.Code,
+                    LccMealOptions(
+                        code=m.Code,
+                        description=m.AirlineDescription or "",
+                        price=m.Price,
+                        for_full_journey=True,
+                    ),
+                )
                 continue
             key = f"{m.FlightNumber}_{m.Origin}"
             if key not in segment_map:
@@ -304,11 +348,15 @@ class TBOTransformer:
                     code=m.Code,
                     description=m.AirlineDescription or "",
                     price=m.Price,
-                    for_full_journey=m.WayType == 2,
+                    for_full_journey=False,
                 )
             )
 
-        return LccSsrView(segments=list(segment_map.values()))
+        return LccSsrView(
+            journey_baggage=list(journey_baggage.values()),
+            journey_meals=list(journey_meals.values()),
+            segments=list(segment_map.values()),
+        )
 
     def transform_fare_rule_response(
         self, tbo_response: TBOFareRuleResponse
@@ -377,6 +425,53 @@ class TBOTransformer:
         return result
 
     # ------------------------------------------------------------------
+    # FARE-QUOTE → PROVIDER PASSENGER FARE HELPERS
+    # ------------------------------------------------------------------
+
+    def _fare_breakdown_for_pax_type(
+        self, fare_quote: TBOFareQuoteResponse, pax_type: int
+    ):
+        """Return the FareBreakdown row matching this passenger type.
+
+        TBO's FareBreakdown is aggregated by pax type (e.g. one row for all
+        adults), so callers must divide by PassengerCount to get per-head values.
+        """
+        for fb in fare_quote.Response.Results.FareBreakdown or []:
+            if int(fb.PassengerType) == int(pax_type):
+                return fb
+        raise ExternalProviderError(
+            provider_code="FARE_BREAKDOWN_MISSING",
+            http_status=502,
+            message=f"FareQuote has no FareBreakdown for pax_type={pax_type}",
+        )
+
+    def _passenger_fare_from_fare_quote(
+        self, *, fare_quote: TBOFareQuoteResponse, pax_type: int,
+    ) -> PassengerFareInfo:
+        """Build a per-head PassengerFareInfo from cached FareQuote.
+
+        OtherCharges is itinerary-level in TBO; FareBreakdown does not carry it
+        per-pax-type. We reconcile via PublishedFare for the customer total
+        (Razorpay), so the per-pax provider block uses 0 here.
+        """
+        fb = self._fare_breakdown_for_pax_type(fare_quote, pax_type)
+        n = fb.PassengerCount or 1
+        return PassengerFareInfo(
+            currency=fb.Currency or "INR",
+            base_fare=money_to_float(divide_money(fb.BaseFare, n)),
+            tax=money_to_float(divide_money(fb.Tax, n)),
+            yq_tax=money_to_float(divide_money(fb.YQTax or 0, n)),
+            other_charges=0,
+            additional_txn_fee_ofrd=money_to_float(
+                divide_money(fb.AdditionalTxnFeeOfrd or 0, n)
+            ),
+            additional_txn_fee_pub=money_to_float(
+                divide_money(fb.AdditionalTxnFeePub or 0, n)
+            ),
+            pg_charge=money_to_float(divide_money(fb.PGCharge or 0, n)),
+        )
+
+    # ------------------------------------------------------------------
     # BOOKING TRANSFORMERS
     # ------------------------------------------------------------------
 
@@ -387,8 +482,15 @@ class TBOTransformer:
         end_user_ip: str,
         raw_ssr: Optional[TBOSSRResponse] = None,
         direction: str = "outbound",
+        fare_quote: TBOFareQuoteResponse | None = None,
     ) -> TBOBookRequest:
         """Build TBO Book request for Non-LCC flights."""
+        if fare_quote is None:
+            raise ExternalProviderError(
+                provider_code="FARE_QUOTE_MISSING",
+                http_status=410,
+                message="FareQuote expired. Please verify fare again before booking.",
+            )
         free_ssr = self._find_free_ssr(raw_ssr)
 
         # Build per-segment lookup maps from cached SSR (mirrors LCC approach)
@@ -461,15 +563,18 @@ class TBOTransformer:
                 else None
             )
 
+            pax_fare = self._passenger_fare_from_fare_quote(
+                fare_quote=fare_quote, pax_type=p.pax_type
+            )
             fare = PassengerFare(
-                Currency=p.fare.currency,
-                BaseFare=p.fare.base_fare,
-                Tax=p.fare.tax,
-                YQTax=p.fare.yq_tax or 0,
-                AdditionalTxnFeeOfrd=p.fare.additional_txn_fee_ofrd or 0,
-                AdditionalTxnFeePub=p.fare.additional_txn_fee_pub or 0,
-                PGCharge=p.fare.pg_charge or 0,
-                OtherCharges=p.fare.other_charges,
+                Currency=pax_fare.currency,
+                BaseFare=pax_fare.base_fare,
+                Tax=pax_fare.tax,
+                YQTax=pax_fare.yq_tax or 0,
+                AdditionalTxnFeeOfrd=pax_fare.additional_txn_fee_ofrd or 0,
+                AdditionalTxnFeePub=pax_fare.additional_txn_fee_pub or 0,
+                PGCharge=pax_fare.pg_charge or 0,
+                OtherCharges=pax_fare.other_charges or 0,
             )
 
             # Determine SSR segments for this direction
@@ -500,17 +605,34 @@ class TBOTransformer:
                         )
                         meal = SimpleMeal(Code=seg_ssr.meal_code, Description=desc)
 
-                # Seat — one full Seat object per segment
+                # Seat — one full Seat object per segment.
+                # SSR validation already ran upstream — any miss here means the
+                # cache rotated between validate() and now: surface as 422.
                 if p.pax_type != 3:  # not infant
                     s_map = seat_maps[seg_idx] if seg_idx < len(seat_maps) else {}
-                    if seg_ssr.seat_code and seg_ssr.seat_code in s_map:
+                    if seg_ssr.seat_code:
+                        if seg_ssr.seat_code not in s_map:
+                            raise SsrValidationError([{
+                                "leg": direction,
+                                "segment": seg_idx,
+                                "pax": p.pax_type,
+                                "type": "seat",
+                                "code": seg_ssr.seat_code,
+                            }])
                         seat_list.append(s_map[seg_ssr.seat_code])
 
                 # Baggage — one per segment
                 if seg_ssr.baggage_code:
                     b_map = baggage_maps[seg_idx] if seg_idx < len(baggage_maps) else {}
-                    if seg_ssr.baggage_code in b_map:
-                        baggage_list.append(b_map[seg_ssr.baggage_code])
+                    if seg_ssr.baggage_code not in b_map:
+                        raise SsrValidationError([{
+                            "leg": direction,
+                            "segment": seg_idx,
+                            "pax": p.pax_type,
+                            "type": "baggage",
+                            "code": seg_ssr.baggage_code,
+                        }])
+                    baggage_list.append(b_map[seg_ssr.baggage_code])
 
             # Auto-assign free SSR if user didn't select anything
             if not meal and free_ssr["free_meal_code"]:
@@ -581,8 +703,15 @@ class TBOTransformer:
         raw_ssr: Optional[TBOSSRResponse] = None,
         force_no_seat_selection: bool = False,
         direction: str = "outbound",
+        fare_quote: TBOFareQuoteResponse | None = None,
     ) -> TBOTicketLCCRequest:
         """Build TBO Ticket request for LCC flights."""
+        if fare_quote is None:
+            raise ExternalProviderError(
+                provider_code="FARE_QUOTE_MISSING",
+                http_status=410,
+                message="FareQuote expired. Please verify fare again before booking.",
+            )
         free_ssr = self._find_free_ssr(raw_ssr)
 
         # Build per-segment lookup maps from cached SSR
@@ -701,13 +830,16 @@ class TBOTransformer:
                 else None
             )
 
+            pax_fare = self._passenger_fare_from_fare_quote(
+                fare_quote=fare_quote, pax_type=p.pax_type
+            )
             fare = PassengerFareSmall(
-                BaseFare=p.fare.base_fare,
-                Tax=p.fare.tax,
-                YQTax=p.fare.yq_tax or 0,
-                AdditionalTxnFeeOfrd=p.fare.additional_txn_fee_ofrd or 0,
-                AdditionalTxnFeePub=p.fare.additional_txn_fee_pub or 0,
-                PGCharge=p.fare.pg_charge or 0,
+                BaseFare=pax_fare.base_fare,
+                Tax=pax_fare.tax,
+                YQTax=pax_fare.yq_tax or 0,
+                AdditionalTxnFeeOfrd=pax_fare.additional_txn_fee_ofrd or 0,
+                AdditionalTxnFeePub=pax_fare.additional_txn_fee_pub or 0,
+                PGCharge=pax_fare.pg_charge or 0,
             )
 
             # Determine SSR segments for this passenger based on direction
@@ -728,19 +860,34 @@ class TBOTransformer:
             for seg_idx in range(num_segments):
                 seg_ssr = ssr_segments[seg_idx] if seg_idx < len(ssr_segments) else None
 
-                # Baggage
+                # Baggage. SSR validation already ran upstream — any miss here
+                # means the cache rotated; raise so the user is asked to refresh.
                 if seg_ssr and seg_ssr.baggage_code:
                     bag_map = (
                         baggage_maps[seg_idx] if seg_idx < len(baggage_maps) else {}
                     )
-                    if seg_ssr.baggage_code in bag_map:
-                        baggage_list.append(bag_map[seg_ssr.baggage_code])
+                    if seg_ssr.baggage_code not in bag_map:
+                        raise SsrValidationError([{
+                            "leg": direction,
+                            "segment": seg_idx,
+                            "pax": p.pax_type,
+                            "type": "baggage",
+                            "code": seg_ssr.baggage_code,
+                        }])
+                    baggage_list.append(bag_map[seg_ssr.baggage_code])
 
                 # Meals
                 if seg_ssr and seg_ssr.meal_code:
                     m_map = meal_maps[seg_idx] if seg_idx < len(meal_maps) else {}
-                    if seg_ssr.meal_code in m_map:
-                        meal_list.append(m_map[seg_ssr.meal_code])
+                    if seg_ssr.meal_code not in m_map:
+                        raise SsrValidationError([{
+                            "leg": direction,
+                            "segment": seg_idx,
+                            "pax": p.pax_type,
+                            "type": "meal",
+                            "code": seg_ssr.meal_code,
+                        }])
+                    meal_list.append(m_map[seg_ssr.meal_code])
 
                 # Seats (skip infants)
                 if p.pax_type != 3:
@@ -749,8 +896,15 @@ class TBOTransformer:
                         not force_no_seat_selection
                         and seg_ssr
                         and seg_ssr.seat_code
-                        and seg_ssr.seat_code in s_map
                     ):
+                        if seg_ssr.seat_code not in s_map:
+                            raise SsrValidationError([{
+                                "leg": direction,
+                                "segment": seg_idx,
+                                "pax": p.pax_type,
+                                "type": "seat",
+                                "code": seg_ssr.seat_code,
+                            }])
                         seat_dynamic.append(s_map[seg_ssr.seat_code])
                     elif seg_idx < len(no_seat_list):
                         seat_dynamic.append(no_seat_list[seg_idx])
@@ -871,18 +1025,8 @@ class TBOTransformer:
                     )
                 )
 
-        # Build fare breakdown
-        fare = itinerary.Fare
-        tax_breakup = None
-        if fare.TaxBreakup:
-            tax_breakup = [{"key": tb.key, "value": tb.value} for tb in fare.TaxBreakup]
-        fare_breakdown = FareBreakdownInfo(
-            currency=fare.Currency,
-            base_fare=fare.BaseFare,
-            tax=fare.Tax,
-            total_fare=fare.PublishedFare,
-            tax_breakup=tax_breakup,
-        )
+        # Build fare breakdown — shared with Non-LCC path via build_fare_breakdown.
+        fare_breakdown = build_fare_breakdown(itinerary.Fare)
 
         # Build mini fare rules
         mini_fare_rules = []
@@ -1016,7 +1160,7 @@ class TBOTransformer:
         all_groups = outbound_groups + inbound_groups
 
         return FlightSearchResponse(
-            search_id=uuid.uuid4().hex[:8],
+            search_id=secrets.token_urlsafe(12),
             trip_type=request.trip_type,
             origin=request.origin,
             destination=request.destination,
@@ -1147,7 +1291,7 @@ class TBOTransformer:
         if fare_type is None:
             fare_type = "Saver"
 
-        fare_id = uuid.uuid4().hex[:4]
+        fare_id = secrets.token_urlsafe(16)
         provider_ref = {
             "TraceId": trace_id,
             "ResultIndex": itinerary.ResultIndex,

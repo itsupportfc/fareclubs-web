@@ -22,7 +22,7 @@ import mastercardLogo from "../assets/payments/MasterCard.png";
 import rupayLogo from "../assets/payments/Rupay.png";
 import upiLogo from "../assets/payments/Bhim.jpg";
 
-import { currencyFmt, computeSsrTotal, buildSsr } from "../utils/formatters";
+import { currencyFmt, computeSsrTotal, buildSsr, buildJourneySsr } from "../utils/formatters";
 import SectionHeader from "../components/booking/SectionHeader";
 import FlightItineraryCard from "../components/booking/FlightItineraryCard";
 import TravellerForm from "../components/booking/TravellerForm";
@@ -54,10 +54,7 @@ export default function BookingPage() {
         returnSelectedFare,
         passengers = { adults: 1, children: 0, infants: 0 },
         isInternationalReturn = false,
-        perPassengerFares,
         fareQuoteFlags: fareQuoteFlagsOneway,
-        perPassengerFaresOutbound,
-        perPassengerFaresInbound,
         fareQuoteFlagsOutbound,
         fareQuoteFlagsInbound,
     } = state || {};
@@ -67,9 +64,6 @@ export default function BookingPage() {
         tripType: isRoundtrip ? "roundtrip" : "oneway",
         isInternationalReturn,
     });
-
-    const perPaxOutbound = perPassengerFaresOutbound || perPassengerFares || [];
-    const perPaxInbound = perPassengerFaresInbound || [];
 
     const fareQuoteFlags =
         fareQuoteFlagsOneway ||
@@ -83,6 +77,9 @@ export default function BookingPage() {
     const [selectedSeats, setSelectedSeats] = useState({});
     const [selectedMeals, setSelectedMeals] = useState({});
     const [selectedBag, setSelectedBag] = useState({});
+    // Trip-level (journey) selections — one per (trip, passenger), not per segment.
+    const [selectedJourneyMeal, setSelectedJourneyMeal] = useState({});
+    const [selectedJourneyBag, setSelectedJourneyBag] = useState({});
     const [bookingError, setBookingError] = useState(null);
     const [ssrLoading, setSsrLoading] = useState(false);
 
@@ -123,26 +120,28 @@ export default function BookingPage() {
                 .reduce((sum, b) => sum + (b?.price || 0), 0),
         [selectedBag],
     );
-    const ssrTotal = seatTotal + mealTotal + bagTotal;
+    const journeyMealTotal = useMemo(
+        () =>
+            Object.values(selectedJourneyMeal)
+                .flatMap((s) => Object.values(s || {}))
+                .reduce((sum, m) => sum + (m?.price || 0), 0),
+        [selectedJourneyMeal],
+    );
+    const journeyBagTotal = useMemo(
+        () =>
+            Object.values(selectedJourneyBag)
+                .flatMap((s) => Object.values(s || {}))
+                .reduce((sum, b) => sum + (b?.price || 0), 0),
+        [selectedJourneyBag],
+    );
+    const ssrTotal = seatTotal + mealTotal + bagTotal + journeyMealTotal + journeyBagTotal;
     const grandTotal =
         (outboundSelectedFare?.totalPrice || 0) +
         (returnSelectedFare?.totalPrice || 0) +
         ssrTotal;
 
-    /* --- Per-head fare helper --- */
-    const getPerHeadFare = (paxType, direction = "outbound") => {
-        const fares = direction === "outbound" ? perPaxOutbound : perPaxInbound;
-        const match = fares.find((f) => f.paxType === paxType);
-        const fallbackFare =
-            direction === "outbound"
-                ? outboundSelectedFare
-                : returnSelectedFare;
-        if (match) return match;
-        return {
-            baseFare: fallbackFare?.baseFare || 0,
-            tax: fallbackFare?.taxes || 0,
-        };
-    };
+    // Per-pax fare breakdown is server-side. Frontend only sends paxType;
+    // backend reloads the full breakdown from cached FareQuote.FareBreakdown.
 
     /* --- Validation --- */
     const calculateAge = (dateOfBirth) => {
@@ -377,23 +376,38 @@ export default function BookingPage() {
     /* --- SSR prefetch on mount --- */
     useEffect(() => {
         if (!outboundSelectedFare?.fareId) return;
-        let cancelled = false;
+        const controller = new AbortController();
         setSsrLoading(true);
-        getSSRAPI({
-            tripType: isRoundtrip ? "roundtrip" : "oneway",
-            fareIdOutbound: outboundSelectedFare.fareId,
-            fareIdInbound: returnSelectedFare?.fareId || null,
-            isInternationalReturn,
-        })
+        getSSRAPI(
+            {
+                tripType: isRoundtrip ? "roundtrip" : "oneway",
+                fareIdOutbound: outboundSelectedFare.fareId,
+                fareIdInbound: returnSelectedFare?.fareId || null,
+                isInternationalReturn,
+            },
+            controller.signal,
+        )
             .then((res) => {
-                if (!cancelled) setSSRData(res);
+                setSSRData(res);
             })
-            .catch((err) => console.error("SSR prefetch failed:", err))
+            .catch((err) => {
+                if (err.name !== "AbortError") {
+                    if (err?.code === "SSR_PROVIDER_DOWN") {
+                        setBookingError(
+                            "Add-ons are temporarily unavailable. " +
+                                "You can still book this flight without seat / meal / baggage selection, " +
+                                "or retry in a few seconds.",
+                        );
+                    } else {
+                        console.error("SSR prefetch failed:", err);
+                    }
+                }
+            })
             .finally(() => {
-                if (!cancelled) setSsrLoading(false);
+                if (!controller.signal.aborted) setSsrLoading(false);
             });
         return () => {
-            cancelled = true;
+            controller.abort();
         };
     }, [outboundSelectedFare?.fareId, returnSelectedFare?.fareId]);
 
@@ -403,6 +417,8 @@ export default function BookingPage() {
             selectedSeats,
             selectedMeals,
             selectedBag,
+            selectedJourneyMeal,
+            selectedJourneyBag,
         );
         return {
             fareIdOutbound: outboundSelectedFare.fareId,
@@ -422,10 +438,6 @@ export default function BookingPage() {
                 const list = travellers.map((t, i) => {
                     const paxType =
                         t.type === "Adult" ? 1 : t.type === "Child" ? 2 : 3;
-                    const perHeadOut = getPerHeadFare(paxType, "outbound");
-                    const perHeadIn = isRoundtrip
-                        ? getPerHeadFare(paxType, "inbound")
-                        : null;
 
                     // Build per-segment SSR for outbound
                     const ssrSegmentsOutbound = (() => {
@@ -480,18 +492,22 @@ export default function BookingPage() {
                         contactNo: t.contactNo || "",
                         email: t.email || "",
                         isLeadPax: i === 0,
-                        fare: {
-                            baseFare: perHeadOut.baseFare,
-                            tax: perHeadOut.tax,
-                            yqTax: perHeadOut.yqTax || 0,
-                            additionalTxnFeeOfrd:
-                                perHeadOut.additionalTxnFeeOfrd || 0,
-                            additionalTxnFeePub:
-                                perHeadOut.additionalTxnFeePub || 0,
-                            pgCharge: perHeadOut.pgCharge || 0,
-                        },
                         ssrSegmentsOutbound,
                         ssrSegmentsInbound,
+                        journeySsrOutbound: buildJourneySsr(
+                            i,
+                            "outbound",
+                            selectedJourneyMeal,
+                            selectedJourneyBag,
+                        ),
+                        journeySsrInbound: isRoundtrip
+                            ? buildJourneySsr(
+                                  i,
+                                  "inbound",
+                                  selectedJourneyMeal,
+                                  selectedJourneyBag,
+                              )
+                            : null,
                     };
                     if (t.pan) pax.pan = t.pan;
                     if (t.passportNo) {
@@ -551,7 +567,48 @@ export default function BookingPage() {
                     state: { booking, outboundFlight },
                 });
             },
-            (err) => setBookingError(err),
+            (err) => handleBookingError(err),
+        );
+    };
+
+    const refetchSsrAndOpenModal = async (toastMessage) => {
+        setBookingError(toastMessage);
+        setSsrLoading(true);
+        try {
+            const fresh = await getSSRAPI({
+                tripType: isRoundtrip ? "roundtrip" : "oneway",
+                fareIdOutbound: outboundSelectedFare.fareId,
+                fareIdInbound: returnSelectedFare?.fareId || null,
+                isInternationalReturn,
+            });
+            setSSRData(fresh);
+            setShowSSR(true);
+        } catch (e) {
+            setBookingError("Add-ons couldn't be reloaded. Please retry.");
+        } finally {
+            setSsrLoading(false);
+        }
+    };
+
+    const handleBookingError = (err) => {
+        // err can be a string (legacy) or an APIError (structured)
+        if (err?.code === "SSR_EXPIRED") {
+            refetchSsrAndOpenModal(
+                "Your add-on selections expired. Please re-confirm them.",
+            );
+            return;
+        }
+        if (err?.code === "SSR_INVALID") {
+            const items = (err.detail?.missing || [])
+                .map((m) => `${m.type} ${m.code}`)
+                .join(", ");
+            refetchSsrAndOpenModal(
+                `Some add-ons are no longer available${items ? ` (${items})` : ""}. Please re-select.`,
+            );
+            return;
+        }
+        setBookingError(
+            typeof err === "string" ? err : err?.message || "Booking failed.",
         );
     };
     return (
@@ -950,6 +1007,10 @@ export default function BookingPage() {
                     setSelectedMeals={setSelectedMeals}
                     selectedBag={selectedBag}
                     setSelectedBag={setSelectedBag}
+                    selectedJourneyMeal={selectedJourneyMeal}
+                    setSelectedJourneyMeal={setSelectedJourneyMeal}
+                    selectedJourneyBag={selectedJourneyBag}
+                    setSelectedJourneyBag={setSelectedJourneyBag}
                     onClose={() => setShowSSR(false)}
                     hasInbound={isRoundtrip && !!ssrData?.inbound}
                 />

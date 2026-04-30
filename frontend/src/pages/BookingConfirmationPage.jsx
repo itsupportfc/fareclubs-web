@@ -13,8 +13,6 @@ import {
   Users,
   Receipt,
   ShieldAlert,
-  ChevronDown,
-  ChevronUp,
   AlertTriangle,
   Info,
   Home,
@@ -120,7 +118,6 @@ function DetailCell({ label, value }) {
 export default function BookingConfirmationPage() {
   const { state } = useLocation();
   const navigate = useNavigate();
-  const [taxExpanded, setTaxExpanded] = useState(false);
   const [downloading, setDownloading] = useState(false);
 
   const pageData = useMemo(() => {
@@ -829,39 +826,51 @@ export default function BookingConfirmationPage() {
                       <span>₹{currencyFmt(fareBreakdown.baseFare)}</span>
                     </div>
 
-                    <div className="flex justify-between text-sm text-gray-700 gap-4">
-                      <button
-                        onClick={() => setTaxExpanded(!taxExpanded)}
-                        type="button"
-                        className="flex items-center gap-1 text-gray-700 hover:text-[#0047FF] transition-colors text-left"
-                      >
-                        Taxes & Fees
-                        {fareBreakdown.taxBreakup?.length > 0 &&
-                          (taxExpanded ? (
-                            <ChevronUp className="w-3.5 h-3.5" />
-                          ) : (
-                            <ChevronDown className="w-3.5 h-3.5" />
-                          ))}
-                      </button>
-                      <span>₹{currencyFmt(fareBreakdown.tax)}</span>
+                    <div className="flex justify-between text-sm text-gray-700">
+                      <span>Taxes & Surcharges</span>
+                      <span>₹{currencyFmt(fareBreakdown.taxesAndSurcharges)}</span>
                     </div>
 
-                    {taxExpanded && fareBreakdown.taxBreakup?.length > 0 && (
-                      <motion.div
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: "auto", opacity: 1 }}
-                        className="space-y-1 bg-gray-50 rounded-xl p-3 border border-gray-100"
-                      >
-                        {fareBreakdown.taxBreakup.map((tb, i) => (
-                          <div
-                            key={i}
-                            className="flex justify-between text-xs text-gray-500"
-                          >
-                            <span>{tb.key}</span>
-                            <span>₹{currencyFmt(tb.value)}</span>
-                          </div>
-                        ))}
-                      </motion.div>
+                    {fareBreakdown.gst != null && fareBreakdown.gst > 0 && (
+                      <div className="flex justify-between text-sm text-gray-700">
+                        <span>GST</span>
+                        <span>₹{currencyFmt(fareBreakdown.gst)}</span>
+                      </div>
+                    )}
+
+                    {fareBreakdown.seatCharges > 0 && (
+                      <div className="flex justify-between text-sm text-gray-700">
+                        <span>Seat Charges</span>
+                        <span>₹{currencyFmt(fareBreakdown.seatCharges)}</span>
+                      </div>
+                    )}
+
+                    {fareBreakdown.mealCharges > 0 && (
+                      <div className="flex justify-between text-sm text-gray-700">
+                        <span>Meal Charges</span>
+                        <span>₹{currencyFmt(fareBreakdown.mealCharges)}</span>
+                      </div>
+                    )}
+
+                    {fareBreakdown.baggageCharges > 0 && (
+                      <div className="flex justify-between text-sm text-gray-700">
+                        <span>Baggage Charges</span>
+                        <span>₹{currencyFmt(fareBreakdown.baggageCharges)}</span>
+                      </div>
+                    )}
+
+                    {fareBreakdown.specialServiceCharges > 0 && (
+                      <div className="flex justify-between text-sm text-gray-700">
+                        <span>Special Service Charges</span>
+                        <span>₹{currencyFmt(fareBreakdown.specialServiceCharges)}</span>
+                      </div>
+                    )}
+
+                    {fareBreakdown.otherCharges > 0 && (
+                      <div className="flex justify-between text-sm text-gray-700">
+                        <span>Other Charges</span>
+                        <span>₹{currencyFmt(fareBreakdown.otherCharges)}</span>
+                      </div>
                     )}
 
                     <div className="border-t border-dashed border-gray-200 pt-4 flex justify-between items-center">

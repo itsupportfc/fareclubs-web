@@ -68,7 +68,6 @@ export default function FareModal({
         },
         returnSelectedFare: null,
         passengers,
-        perPassengerFares: quoteResponse?.perPassengerFaresOutbound || [],
         fareQuoteFlags: quoteResponse?.flagsOutbound || null,
       },
     });
