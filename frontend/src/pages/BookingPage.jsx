@@ -559,7 +559,7 @@ export default function BookingPage() {
                 try {
                     sessionStorage.setItem(
                         "fc_booking_confirmation",
-                        JSON.stringify({ booking, outboundFlight, inboundFlight }),
+                        JSON.stringify({ booking, outboundFlight }),
                     );
                 } catch {}
                 navigate("/booking/confirmation", {
