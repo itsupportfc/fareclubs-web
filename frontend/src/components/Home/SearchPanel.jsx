@@ -99,6 +99,10 @@ function SearchPanel() {
             );
             return;
         }
+        if(originCode === destinationCode){
+            toast.error("Origin and destination cannot be the same airport.");
+            return;
+        }
 
         if (departDate < today) {
             toast.error("Departure date cannot be in the past.");

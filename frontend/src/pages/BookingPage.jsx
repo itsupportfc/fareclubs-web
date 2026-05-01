@@ -82,13 +82,12 @@ export default function BookingPage() {
     const [selectedJourneyBag, setSelectedJourneyBag] = useState({});
     const [bookingError, setBookingError] = useState(null);
     const [ssrLoading, setSsrLoading] = useState(false);
-
+    const SESSION_WARNING_SECONDS = 5 * 60; //Show banner for the last 5 minutes 
     const searchTimestamp = useFlightStore((s) => s.searchTimestamp);
     // calculate remaining session time
     const secondsLeft = useSessionCountdown(searchTimestamp);
     const sessionExpired = secondsLeft === 0;
-    const showSessionWarning = secondsLeft > 0 && secondsLeft <= 13 * 60; // last 5 minutes
-
+    const showSessionWarning = secondsLeft > 0 && secondsLeft <= SESSION_WARNING_SECONDS;
     const token = localStorage.getItem("access_token");
     const { initiateBooking, isProcessing, processingStep } =
         useRazorpayBooking(token);
@@ -560,7 +559,7 @@ export default function BookingPage() {
                 try {
                     sessionStorage.setItem(
                         "fc_booking_confirmation",
-                        JSON.stringify({ booking, outboundFlight }),
+                        JSON.stringify({ booking, outboundFlight, inboundFlight }),
                     );
                 } catch {}
                 navigate("/booking/confirmation", {
