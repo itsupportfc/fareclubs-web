@@ -496,6 +496,7 @@ class TBOTransformer:
         # Build per-segment lookup maps from cached SSR (mirrors LCC approach)
         seat_maps: list[dict[str, Seat]] = []
         baggage_maps: list[dict[str, Baggage]] = []
+        journey_baggage_map: dict[str, Baggage] = {}
         meal_map: dict[str, SimpleMeal] = {}  # non-LCC meals are a flat list
         segment_keys: list[tuple[str, str]] = []  # (Origin, FlightNumber) per segment
 
@@ -542,6 +543,13 @@ class TBOTransformer:
                     for gk, gv in grouped.items():
                         if gk not in seen:
                             baggage_maps.append(gv)
+
+            # Journey-level baggage (WayType==2 — full trip, not per segment)
+            if raw_ssr.Response.Baggage:
+                for seg_options in raw_ssr.Response.Baggage:
+                    for b in seg_options or []:
+                        if b.WayType == 2:
+                            journey_baggage_map.setdefault(b.Code, b)
 
             # Meal — flat list for non-LCC (SimpleMeal: Code + Description string)
             if raw_ssr.Response.Meal:
@@ -633,6 +641,32 @@ class TBOTransformer:
                             "code": seg_ssr.baggage_code,
                         }])
                     baggage_list.append(b_map[seg_ssr.baggage_code])
+
+            # Journey-level SSR (WayType==2 — one entry per trip direction, not per segment)
+            if request.is_international_return:
+                j_ssr_items = [
+                    j for j in [p.journey_ssr_outbound, p.journey_ssr_inbound] if j
+                ]
+            elif direction == "inbound":
+                j_ssr_items = [p.journey_ssr_inbound] if p.journey_ssr_inbound else []
+            else:
+                j_ssr_items = [p.journey_ssr_outbound] if p.journey_ssr_outbound else []
+
+            for j_ssr in j_ssr_items:
+                if j_ssr.baggage_code:
+                    if j_ssr.baggage_code not in journey_baggage_map:
+                        raise SsrValidationError([{
+                            "leg": direction,
+                            "segment": "journey",
+                            "pax": p.pax_type,
+                            "type": "baggage",
+                            "code": j_ssr.baggage_code,
+                        }])
+                    baggage_list.append(journey_baggage_map[j_ssr.baggage_code])
+                # Non-LCC meal: single preference applying to whole ticket
+                if j_ssr.meal_code and not meal and j_ssr.meal_code in meal_map:
+                    desc = meal_map[j_ssr.meal_code].Description
+                    meal = SimpleMeal(Code=j_ssr.meal_code, Description=desc)
 
             # Auto-assign free SSR if user didn't select anything
             if not meal and free_ssr["free_meal_code"]:
@@ -815,6 +849,19 @@ class TBOTransformer:
                             if gk in free_per_group:
                                 free_meals_by_segment.append(free_per_group[gk])
 
+        # Journey-level SSR maps (WayType==2 — full trip, not per segment)
+        journey_baggage_map: dict[str, Baggage] = {}
+        journey_meal_map: dict[str, Meal] = {}
+        if raw_ssr and raw_ssr.Response:
+            for seg_options in raw_ssr.Response.Baggage or []:
+                for b in seg_options or []:
+                    if b.WayType == 2:
+                        journey_baggage_map.setdefault(b.Code, b)
+            for seg_options in raw_ssr.Response.MealDynamic or []:
+                for m in seg_options or []:
+                    if m.WayType == 2:
+                        journey_meal_map.setdefault(m.Code, m)
+
         num_segments = max(len(seat_maps), len(no_seat_list), 1)
 
         passengers = []
@@ -908,6 +955,38 @@ class TBOTransformer:
                         seat_dynamic.append(s_map[seg_ssr.seat_code])
                     elif seg_idx < len(no_seat_list):
                         seat_dynamic.append(no_seat_list[seg_idx])
+
+            # Journey-level SSR (WayType==2 — one entry per trip direction, not per segment)
+            if request.is_international_return:
+                j_ssr_items = [
+                    j for j in [p.journey_ssr_outbound, p.journey_ssr_inbound] if j
+                ]
+            elif direction == "inbound":
+                j_ssr_items = [p.journey_ssr_inbound] if p.journey_ssr_inbound else []
+            else:
+                j_ssr_items = [p.journey_ssr_outbound] if p.journey_ssr_outbound else []
+
+            for j_ssr in j_ssr_items:
+                if j_ssr.baggage_code:
+                    if j_ssr.baggage_code not in journey_baggage_map:
+                        raise SsrValidationError([{
+                            "leg": direction,
+                            "segment": "journey",
+                            "pax": p.pax_type,
+                            "type": "baggage",
+                            "code": j_ssr.baggage_code,
+                        }])
+                    baggage_list.append(journey_baggage_map[j_ssr.baggage_code])
+                if j_ssr.meal_code:
+                    if j_ssr.meal_code not in journey_meal_map:
+                        raise SsrValidationError([{
+                            "leg": direction,
+                            "segment": "journey",
+                            "pax": p.pax_type,
+                            "type": "meal",
+                            "code": j_ssr.meal_code,
+                        }])
+                    meal_list.append(journey_meal_map[j_ssr.meal_code])
 
             # Auto-assign free SSR if user didn't select anything
             if not meal_list and free_meals_by_segment:

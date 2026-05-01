@@ -102,6 +102,23 @@ class LegExecutionResult:
         return None
 
 
+def _any_journey_baggage(payload: BookingConfirmRequest) -> bool:
+    return any(
+        (p.journey_ssr_outbound and p.journey_ssr_outbound.baggage_code)
+        or (p.journey_ssr_inbound and p.journey_ssr_inbound.baggage_code)
+        for p in payload.passengers
+    )
+
+
+def _ticket_baggage_charges(result: LegExecutionResult | None) -> float:
+    if result is None or result.ticket_response is None:
+        return 0.0
+    inner = result.ticket_response.Response.Response
+    if inner and inner.FlightItinerary and inner.FlightItinerary.Fare:
+        return float(inner.FlightItinerary.Fare.TotalBaggageCharges or 0)
+    return 0.0
+
+
 class BookingCheckoutService:
     # injects all the dependencies, makes it testable
     def __init__(
@@ -688,6 +705,24 @@ class BookingCheckoutService:
         )
         logger.debug("derived overall_status=%s", overall_status)
 
+        # Reconciliation: if journey baggage was charged but TBO reports 0 baggage
+        # charges, alert staff so they can manually verify/refund the add-on.
+        if _any_journey_baggage(payload):
+            ob_charges = _ticket_baggage_charges(outbound_result)
+            ib_charges = _ticket_baggage_charges(inbound_result)
+            if ob_charges == 0.0 and ib_charges == 0.0:
+                subject = (
+                    f"[SSR ADDON MISSED] Journey baggage not applied — "
+                    f"payment_id={payload.payment_id}"
+                )
+                body = (
+                    f"<p>Journey baggage was selected and charged but TBO reports "
+                    f"TotalBaggageCharges=0. Manual verification/refund may be required."
+                    f"<br>payment_id={payload.payment_id}"
+                    f"<br>payment_order_id={payload.payment_order_id}</p>"
+                )
+                background_tasks.add_task(send_staff_alert_email, subject, body)
+
         if (
             overall_status == BookingOverallStatus.CONFIRMED
             and outbound_result.provider_raw
@@ -918,20 +953,28 @@ class BookingCheckoutService:
                 return [blocks[leg_index]] if leg_index < len(blocks) else []
             return list(blocks)
 
-        seat_price_paise_by_code: dict[str, int] = {}
+        # Seats: build per-segment maps. On multi-segment flights the same
+        # seat code (e.g. "6A") exists on every leg at a different price.
+        # A single flat map would overwrite earlier prices with later ones,
+        # producing a wrong total. ssrSelectionsOutbound is ordered as
+        # passengers.flatMap(p => p.ssrSegmentsOutbound), so selection[i]
+        # belongs to segment (i % num_segments).
+        seat_segments: list[dict[str, int]] = []
         for sd in _pick_blocks(response.SeatDynamic):
             if not sd or not sd.SegmentSeat:
                 continue
             for seg in sd.SegmentSeat:
-                if not seg.RowSeats:
-                    continue
-                for row in seg.RowSeats:
-                    for seat in row.Seats or []:
-                        if seat.Code and seat.Code != "NoSeat":
-                            seat_price_paise_by_code[seat.Code] = rupees_to_paise(
-                                seat.Price
-                            )
+                seg_map: dict[str, int] = {}
+                if seg.RowSeats:
+                    for row in seg.RowSeats:
+                        for seat in row.Seats or []:
+                            if seat.Code and seat.Code != "NoSeat":
+                                seg_map[seat.Code] = rupees_to_paise(seat.Price)
+                seat_segments.append(seg_map)
+        num_seat_segs = len(seat_segments)
 
+        # Baggage and meals: flat maps are fine — on multi-segment flights the
+        # same code is normally priced identically across segments.
         baggage_price_paise_by_code: dict[str, int] = {}
         for block in _pick_blocks(response.Baggage):
             for b in block or []:
@@ -947,7 +990,7 @@ class BookingCheckoutService:
                     meal_price_paise_by_code[m.Code] = rupees_to_paise(m.Price)
 
         total_paise = 0
-        for sel in selections:
+        for i, sel in enumerate(selections):
             if sel is None:
                 continue
             if sel.meal_code:
@@ -971,12 +1014,17 @@ class BookingCheckoutService:
                 else:
                     total_paise += price
             if sel.seat_code:
-                price = seat_price_paise_by_code.get(sel.seat_code)
+                if num_seat_segs > 0:
+                    seg_idx = i % num_seat_segs
+                    price = seat_segments[seg_idx].get(sel.seat_code)
+                else:
+                    price = None
                 if price is None:
                     logger.warning(
-                        "SSR pricing: seat_code=%s not found in cached SSR (leg_index=%d) — skipping",
+                        "SSR pricing: seat_code=%s not found in cached SSR (leg_index=%d, sel_index=%d) — skipping",
                         sel.seat_code,
                         leg_index,
+                        i,
                     )
                 else:
                     total_paise += price

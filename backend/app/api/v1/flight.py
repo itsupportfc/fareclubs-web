@@ -353,7 +353,7 @@ async def get_fare_quote(
 # ==============================================================================
 
 
-@router.post("/ssr")
+@router.post("/ssr", response_model=SsrResponse)
 async def get_ssr_details(
     payload: SsrRequest,
     cache=Depends(get_flight_cache),
@@ -371,9 +371,7 @@ async def get_ssr_details(
     is_lcc_outbound = outbound_provider_ref.get("IsLCC", False)
     is_lcc_inbound = False
 
-    async def _fetch_ssr_with_cache(
-        fare_id: str, req: TBOSSRRequest
-    ) -> TBOSSRResponse:
+    async def _fetch_ssr_with_cache(fare_id: str, req: TBOSSRRequest) -> TBOSSRResponse:
         """Cache-lookup-first + single-flight fetch.
 
         - Hit Redis first; on cache hit, no TBO call.
@@ -387,9 +385,7 @@ async def get_ssr_details(
         async def _factory() -> TBOSSRResponse:
             # Re-check under SingleFlight ownership: another caller may have
             # populated the cache while we waited.
-            inner_cached = await cache.get_model(
-                f"raw_ssr_{fare_id}", TBOSSRResponse
-            )
+            inner_cached = await cache.get_model(f"raw_ssr_{fare_id}", TBOSSRResponse)
             if inner_cached is not None:
                 return inner_cached
             resp = await client.get_ssr(req)
