@@ -22,10 +22,14 @@ class SsrValidationService:
         fare_id_inbound: str | None,
         ssr_selections_outbound: list,
         ssr_selections_inbound: list,
+        journey_ssr_outbound: list | None = None,
+        journey_ssr_inbound: list | None = None,
         is_international_return: bool,
     ) -> None:
         """Raise SsrValidationError or SsrExpiredError; otherwise return None."""
-        if not (ssr_selections_outbound or ssr_selections_inbound):
+        has_per_segment = bool(ssr_selections_outbound or ssr_selections_inbound)
+        has_journey = bool(journey_ssr_outbound or journey_ssr_inbound)
+        if not has_per_segment and not has_journey:
             return  # no SSR to validate
 
         # Outbound raw SSR — also covers inbound for international return
@@ -46,8 +50,18 @@ class SsrValidationService:
                     is_intl=is_international_return,
                 )
             )
+        if journey_ssr_outbound:
+            missing.extend(
+                self._check(
+                    raw=outbound_raw,
+                    selections=journey_ssr_outbound,
+                    leg="outbound",
+                    leg_index=0,
+                    is_intl=is_international_return,
+                )
+            )
 
-        if ssr_selections_inbound:
+        if ssr_selections_inbound or journey_ssr_inbound:
             if is_international_return:
                 inbound_raw = outbound_raw
                 inbound_leg_index = 1
@@ -58,15 +72,26 @@ class SsrValidationService:
                 if inbound_raw is None:
                     raise SsrExpiredError()
                 inbound_leg_index = 0
-            missing.extend(
-                self._check(
-                    raw=inbound_raw,
-                    selections=ssr_selections_inbound,
-                    leg="inbound",
-                    leg_index=inbound_leg_index,
-                    is_intl=is_international_return,
+            if ssr_selections_inbound:
+                missing.extend(
+                    self._check(
+                        raw=inbound_raw,
+                        selections=ssr_selections_inbound,
+                        leg="inbound",
+                        leg_index=inbound_leg_index,
+                        is_intl=is_international_return,
+                    )
                 )
-            )
+            if journey_ssr_inbound:
+                missing.extend(
+                    self._check(
+                        raw=inbound_raw,
+                        selections=journey_ssr_inbound,
+                        leg="inbound",
+                        leg_index=inbound_leg_index,
+                        is_intl=is_international_return,
+                    )
+                )
 
         if missing:
             raise SsrValidationError(missing)

@@ -47,6 +47,22 @@ export function useRazorpayBooking(token) {
                       ) ?? null)
                     : null;
 
+                // Journey-level SSR: one entry per passenger (NOT per segment),
+                // matching backend `journey_ssr_outbound: list[SsrSelection | None]`.
+                // Without this, journey baggage / journey meal prices are in the
+                // client-side grand total but missing from the server's verified
+                // total, producing "Amount mismatch" at /create-order.
+                const journeySsrOutbound =
+                    bookingPayload.passengers?.map(
+                        (p) => p.journeySsrOutbound ?? null,
+                    ) ?? null;
+
+                const journeySsrInbound = bookingPayload.fareIdInbound
+                    ? (bookingPayload.passengers?.map(
+                          (p) => p.journeySsrInbound ?? null,
+                      ) ?? null)
+                    : null;
+
                 const createOrderPayload = {
                     fareIdOutbound: bookingPayload.fareIdOutbound,
                     fareIdInbound: bookingPayload.fareIdInbound ?? null,
@@ -56,6 +72,8 @@ export function useRazorpayBooking(token) {
                     clientTotalAmount: bookingPayload.totalAmount,
                     ssrSelectionsOutbound,
                     ssrSelectionsInbound,
+                    journeySsrOutbound,
+                    journeySsrInbound,
                 };
 
                 setProcessingStep(1);
