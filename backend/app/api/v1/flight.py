@@ -25,19 +25,18 @@ from app.transformers.tbo_transformer import TBOTransformer
 from app.utils.cache import get_flight_cache
 from app.utils.money import divide_money, money_to_float, rupees_to_paise, to_money
 from app.utils.single_flight import ssr_single_flight
+from app.core.rate_limit import limiter
 from fastapi import (
     APIRouter,
     Depends,
     HTTPException,
+    Request,
     status,
 )
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/flights", tags=["Flights"])
-limiter = Limiter(key_func=get_remote_address)
 
 
 # ==============================================================================
@@ -46,7 +45,9 @@ limiter = Limiter(key_func=get_remote_address)
 
 
 @router.post("/search", response_model=FlightSearchResponse)
+@limiter.limit("10/minute")
 async def search_flights(
+    request: Request,
     payload: FlightSearchRequest,
     client: TBOClient = Depends(get_tbo_client),
     transformer: TBOTransformer = Depends(get_tbo_transformer),

@@ -21,7 +21,14 @@
       "WebFetch(domain:istywhyerlina.medium.com)",
       "Bash(python:*)",
       "Bash(du -sh \"/d/CSE/Fareclubs/Projects/fareclubs-web/backend/static/\"*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(Get-ChildItem \"D:\\\\CSE\\\\Fareclubs\\\\Projects\\\\fareclubs-web\\\\backend\" -Directory)",
+      "Bash(Select-Object Name)",
+      "Bash(Get-ChildItem -Path \"D:\\\\CSE\\\\Fareclubs\\\\Projects\\\\fareclubs-web\\\\backend\" -Recurse -Filter \"*.py\")",
+      "Bash(Select-String -Pattern \"\\(seed|airport|airline|init_db|load|bulk_insert\\)\" -List)",
+      "Bash(Select-Object Path)",
+      "Bash(Get-Unique)",
+      "Bash(Get-ChildItem *)"
     ]
   }
 }

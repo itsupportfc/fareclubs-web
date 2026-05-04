@@ -1,20 +1,19 @@
 import logging
 from contextlib import asynccontextmanager
 
-from app.api.v1 import airports, auth, flight, flight_booking
+from app.api.v1 import airports, auth, flight, flight_booking, webhooks
 from app.api.v1.dependencies import _tbo_client
 from app.clients.exceptions import ExternalProviderError
 from app.core.exceptions import SsrValidationError
 from app.core.http_logging import RequestIdMiddleware
 from app.core.logging import setup_logging
+from app.core.rate_limit import limiter
 from app.core.response_logging import ResponseLoggingMiddleware
 from app.utils.cache import FlightCache, flight_cache, get_flight_cache
 from fastapi import Depends, FastAPI, status
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
-from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
-from slowapi.util import get_remote_address
 from starlette.middleware.cors import CORSMiddleware
 
 setup_logging()
@@ -54,7 +53,6 @@ app.add_middleware(
 )
 app.add_middleware(RequestIdMiddleware)
 
-limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
 
 
@@ -138,3 +136,4 @@ app.include_router(auth.router, prefix="/api/v1")
 app.include_router(flight.router, prefix="/api/v1")
 app.include_router(flight_booking.router, prefix="/api/v1")
 app.include_router(airports.router, prefix="/api/v1")
+app.include_router(webhooks.router, prefix="/api/v1")

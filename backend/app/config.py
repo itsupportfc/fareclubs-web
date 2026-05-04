@@ -18,6 +18,7 @@ class Settings(BaseSettings):
 
     RAZORPAY_KEY_ID: str
     RAZORPAY_KEY_SECRET: str
+    RAZORPAY_WEBHOOK_SECRET: str = ""  # set when webhook is configured in Razorpay dashboard
 
     # Redis — in docker-compose the hostname "redis" resolves to the redis container
     REDIS_URL: str = "redis://localhost:6379/0"

@@ -5,6 +5,8 @@ Thin wrappers around the Razorpay Python SDK for order creation and
 payment signature verification.
 """
 
+import hashlib
+import hmac
 import logging
 
 import razorpay
@@ -52,3 +54,13 @@ def verify_payment_signature(order_id: str, payment_id: str, signature: str) -> 
             payment_id,
         )
         return False
+
+
+def verify_webhook_signature(body: bytes, signature: str, secret: str) -> bool:
+    """Verify a Razorpay webhook signature.
+
+    Different scheme from the order/payment signature: HMAC-SHA256 of the
+    raw request body using the webhook secret.
+    """
+    expected = hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(expected, signature)

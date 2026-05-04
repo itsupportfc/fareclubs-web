@@ -82,6 +82,10 @@ const SeatsTab = ({ ssrData, travellers, selectedSeats, setSelectedSeats, hasInb
     const [trip, setTrip] = useState("outbound");
     const [segmentIndex, setSegmentIndex] = useState(0);
     const [activePax, setActivePax] = useState(0);
+    const handleTripChange = (t) => {
+        setTrip(t);
+        setSegmentIndex(0);
+    };
 
     const segments =
         trip === "outbound"
@@ -95,7 +99,7 @@ const SeatsTab = ({ ssrData, travellers, selectedSeats, setSelectedSeats, hasInb
 
     return (
         <>
-            <TripTabs active={trip} setActive={setTrip} hasInbound={hasInbound} />
+            <TripTabs active={trip} setActive={handleTripChange} hasInbound={hasInbound} />
             <LegTabs segments={segments} index={segmentIndex} setIndex={setSegmentIndex} />
             <PassengerSelector travellers={travellers} active={activePax} setActive={setActivePax} />
 
@@ -174,6 +178,10 @@ const MealsTab = ({
     const [trip, setTrip] = useState("outbound");
     const [segmentIndex, setSegmentIndex] = useState(0);
     const [activePax, setActivePax] = useState(0);
+    const handleTripChange = (t) => {
+        setTrip(t);
+        setSegmentIndex(0);
+    };
 
     const tripData = trip === "outbound" ? ssrData?.outbound : ssrData?.inbound;
     const segments = tripData?.segments;
@@ -184,7 +192,7 @@ const MealsTab = ({
 
     return (
         <>
-            <TripTabs active={trip} setActive={setTrip} hasInbound={hasInbound} />
+            <TripTabs active={trip} setActive={handleTripChange} hasInbound={hasInbound} />
             <PassengerSelector travellers={travellers} active={activePax} setActive={setActivePax} />
 
             {/* Journey-level meals — covers the entire trip */}
@@ -278,6 +286,10 @@ const BaggageTab = ({
     const [trip, setTrip] = useState("outbound");
     const [segmentIndex, setSegmentIndex] = useState(0);
     const [activePax, setActivePax] = useState(0);
+    const handleTripChange = (t) => {
+        setTrip(t);
+        setSegmentIndex(0);
+    };
 
     const tripData = trip === "outbound" ? ssrData?.outbound : ssrData?.inbound;
     const segments = tripData?.segments;
@@ -288,7 +300,7 @@ const BaggageTab = ({
 
     return (
         <>
-            <TripTabs active={trip} setActive={setTrip} hasInbound={hasInbound} />
+            <TripTabs active={trip} setActive={handleTripChange} hasInbound={hasInbound} />
             <PassengerSelector travellers={travellers} active={activePax} setActive={setActivePax} />
 
             {/* Journey-level baggage — covers the entire trip */}

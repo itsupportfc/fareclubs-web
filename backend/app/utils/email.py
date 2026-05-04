@@ -143,6 +143,38 @@ def build_booking_failure_email(
     return subject, html_body
 
 
+def build_orphan_payment_email(
+    razorpay_order_id: str,
+    razorpay_payment_id: str,
+    amount_paise: int,
+    event_type: str,
+) -> tuple[str, str]:
+    """Alert sent when a Razorpay webhook arrives for an order that has no
+    matching booking on our side (browser died after capture, before /confirm).
+    """
+    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+    subject = f"[ORPHAN PAYMENT] {event_type} — {razorpay_payment_id}"
+    html_body = f"""
+    <html><body style="font-family:sans-serif;font-size:14px;color:#333;">
+    <h2 style="color:#c0392b;">Orphan Razorpay Payment</h2>
+    <p>A webhook arrived for a payment with no matching booking record.
+    The customer was charged but no ticket was issued.</p>
+    <table style="border-collapse:collapse;" cellpadding="8">
+      <tr><td><strong>Timestamp</strong></td><td>{timestamp}</td></tr>
+      <tr><td><strong>Event</strong></td><td>{event_type}</td></tr>
+      <tr><td><strong>Razorpay Order ID</strong></td><td>{razorpay_order_id}</td></tr>
+      <tr><td><strong>Razorpay Payment ID</strong></td><td>{razorpay_payment_id}</td></tr>
+      <tr><td><strong>Amount</strong></td><td>₹{amount_paise / 100:.2f}</td></tr>
+    </table>
+    <p style="margin-top:16px;color:#c0392b;">
+      <strong>Action required:</strong> reach out to the customer to either reissue the ticket
+      manually or initiate a refund via the Razorpay dashboard.
+    </p>
+    </body></html>
+    """
+    return subject, html_body
+
+
 def build_booking_attention_email(
     payload,
     message: str,

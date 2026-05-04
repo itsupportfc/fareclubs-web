@@ -70,18 +70,6 @@ ERROR_CODE_MAP = {
     TBOResponseStatus.AUTH_FAILED: ("AUTH_FAILED", 401),
 }
 
-_SEAT_UNAVAILABLE_MARKERS = (
-    "selected seat has already been reserved",
-    "seat has already been reserved",
-    "seat unavailable",
-)
-
-_MEAL_REQUIRED_MARKERS = (
-    "meal selection is mandatory",
-    "meal is mandatory",
-    "meal selection required",
-)
-
 
 class TBOClient:
     """Client to interact with TBO API."""
@@ -414,17 +402,9 @@ class TBOClient:
             tbo_response.get("Response", {}).get("Error", {}).get("ErrorMessage")
         )
 
-        normalized_msg = (error_msg or "").lower()
-        if any(marker in normalized_msg for marker in _SEAT_UNAVAILABLE_MARKERS):
-            provider_code = "SEAT_UNAVAILABLE"
-            http_status = 409
-        elif any(marker in normalized_msg for marker in _MEAL_REQUIRED_MARKERS):
-            provider_code = "MEAL_REQUIRED"
-            http_status = 400
-        else:
-            provider_code, http_status = ERROR_CODE_MAP.get(
-                error_code, ("UNKNOWN_ERROR", 500)
-            )
+        provider_code, http_status = ERROR_CODE_MAP.get(
+            error_code, ("UNKNOWN_ERROR", 500)
+        )
 
         logger.error(
             "%s ERROR (%s): %s",
