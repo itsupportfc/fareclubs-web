@@ -1,0 +1,49 @@
+[33m1b93d73[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mrahul[m[33m, [m[1;31morigin/rahul[m[33m)[m latets changes
+[33m20c33c6[m latest code
+[33me182dd1[m Merge branch 'rahul' of https://github.com/itsupportfc/fareclubs-web into rahul
+[33m553021a[m webhook added, ssr fix.
+[33m03338f3[m local changes
+[33m8acac4c[m Merge branch 'rahul' of https://github.com/itsupportfc/fareclubs-web into himanshu
+[33me0d2e64[m airport auot completion made better; fixed ssr issue
+[33m58a1673[m merge rahul branch into himanshu
+[33m08700cb[m save local changes
+[33mc31332d[m fixed SSR shape
+[33mab0c2b9[m logging out
+[33m0c80622[m logging off
+[33m11a35f8[m simplified logging
+[33m9fde932[m singleton client and async client pooling
+[33m5f19609[m some random fixes
+[33m4dce4e7[m Merge branch 'restart-work' into rahul
+[33m297704a[m[33m ([m[1;32mrestart-work[m[33m, [m[1;32mmain[m[33m)[m starting again
+[33m7a7146e[m saving changes
+[33m28f6b58[m Merge origin/rahul into himanshu
+[33ma019dee[m Merge origin/rahul into himanshu
+[33mcb54b02[m delted unused files, pay btn double click, Error Boundary, Code splittting, Zustand selectors, Caching, Skeleton loaders, 404 fallback , index.html
+[33m8b95289[m[33m ([m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m fixed filter bug( closes #1)
+[33m276f1df[m filters are working
+[33mb434a9e[m WIP: local changes part-1
+[33m9933320[m My UI Changes
+[33m7991d21[m save local changes before rebase
+[33m9caab13[m save local changes before rebase
+[33m3c06fe6[m rebasing latest changes
+[33medbaa97[m save local changes
+[33m424bb22[m file added
+[33m51f51bb[m WIP: local changes part-1
+[33mff69032[m fixing filters
+[33mfab2658[m fixing filters
+[33medbeb25[m[33m ([m[1;31morigin/himanshu[m[33m)[m My UI Changes
+[33m6374da3[m WIP: save local changes before rebase
+[33mef5700a[m save local changes before rebase
+[33m8985509[m save local changes before rebase
+[33m8d4584f[m save local changes before rebase
+[33mac3709e[m rebasing latest changes
+[33mf53e023[m save local changes
+[33m5bba531[m[33m ([m[1;32mrahul-backup[m[33m)[m fixed backend bug
+[33m18789ee[m improved backend structure
+[33ma5f6894[m changes to NON-LCC SSR handling
+[33mafde6c8[m working all cases
+[33m56f127a[m internations return results page
+[33m5e7112b[m improved
+[33m9992793[m working before UI changes
+[33m312f411[m Backend changes
+[33md070785[m Initial commit: setup FastAPI + React + Docker project

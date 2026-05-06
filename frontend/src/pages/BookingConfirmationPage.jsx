@@ -727,26 +727,14 @@ export default function BookingConfirmationPage() {
                 </div>
 
                 <div className="p-6 space-y-6">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-1 gap-3">
-                    <DetailCell label="Booking ID" value={displayBookingId} />
-
-                    {displayInboundBookingId && (
-                      <DetailCell
-                        label="Return Booking ID"
-                        value={displayInboundBookingId}
-                      />
-                    )}
-
-                    
-                    {displayInvoiceAmount != null && (
+                  {displayInvoiceAmount != null && (
+                    <div className="grid grid-cols-1 gap-3">
                       <DetailCell
                         label="Invoice Amount"
                         value={`₹${currencyFmt(displayInvoiceAmount)}`}
                       />
-                    )}
-
-                    
-                  </div>
+                    </div>
+                  )}
 
                   {(isConfirmed || isPartial) && (
                     <div className="flex flex-col sm:flex-row xl:flex-col gap-3">
