@@ -178,4 +178,4 @@ export default function FareRules({ flightToken }) {
             {fareError && <p className="text-red-600">{fareError}</p>}
         </div>
     );
-}
+};

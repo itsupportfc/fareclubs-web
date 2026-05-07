@@ -76,3 +76,21 @@ class FareQuoteResponse(InternalBaseSchema):
     # Schedule change detection
     is_time_changed_outbound: bool = False
     is_time_changed_inbound: bool = False
+
+    # Authoritative customer-payable totals from the fare-quote PublishedFare.
+    # Always populated, regardless of whether the price changed (the
+    # is_price_changed / outbound / inbound fields above only fire on user-
+    # visible bumps ≥ ₹50). The frontend uses these as the source of truth for
+    # outboundSelectedFare.totalPrice / returnSelectedFare.totalPrice so the
+    # client-side grand total stays in sync with verified_price_paise_*.
+    verified_total_price_outbound: float = Field(
+        description="PublishedFare for outbound (customer-payable total, in INR)"
+    )
+    verified_total_price_inbound: float | None = Field(
+        default=None,
+        description=(
+            "PublishedFare for inbound — set for domestic roundtrip only. "
+            "International roundtrip and oneway leave this None (the outbound "
+            "value covers the whole booking)."
+        ),
+    )

@@ -36,12 +36,17 @@ export function useRazorpayBooking(token) {
 
             let orderData;
             try {
+                // International roundtrip uses one linked fareId, so fareIdInbound
+                // is null even though there's a real inbound leg with SSRs. Gate
+                // on tripType so inbound selections still ride along.
+                const isRoundtrip = bookingPayload.tripType === "roundtrip";
+
                 const ssrSelectionsOutbound =
                     bookingPayload.passengers?.flatMap(
                         (p) => p.ssrSegmentsOutbound ?? [],
                     ) ?? null;
 
-                const ssrSelectionsInbound = bookingPayload.fareIdInbound
+                const ssrSelectionsInbound = isRoundtrip
                     ? (bookingPayload.passengers?.flatMap(
                           (p) => p.ssrSegmentsInbound ?? [],
                       ) ?? null)
@@ -57,7 +62,7 @@ export function useRazorpayBooking(token) {
                         (p) => p.journeySsrOutbound ?? null,
                     ) ?? null;
 
-                const journeySsrInbound = bookingPayload.fareIdInbound
+                const journeySsrInbound = isRoundtrip
                     ? (bookingPayload.passengers?.map(
                           (p) => p.journeySsrInbound ?? null,
                       ) ?? null)

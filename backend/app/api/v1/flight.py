@@ -332,6 +332,20 @@ async def get_fare_quote(
             changes.append(f"Inbound increased by ₹{inbound_detail.difference:.2f}")
         message = " | ".join(changes)
 
+    # Authoritative customer-payable totals — always sent, so the frontend can
+    # sync outboundSelectedFare.totalPrice / returnSelectedFare.totalPrice with
+    # the same PublishedFare we just cached as verified_price_paise_*. Without
+    # this, fare-quote price drops (or sub-₹50 increases) leave the frontend on
+    # the stale search-time price and /create-order fails with Amount mismatch.
+    verified_total_price_outbound = float(
+        outbound_tbo_response.Response.Results.Fare.PublishedFare
+    )
+    verified_total_price_inbound: float | None = None
+    if inbound_tbo_response and not payload.is_international_return:
+        verified_total_price_inbound = float(
+            inbound_tbo_response.Response.Results.Fare.PublishedFare
+        )
+
     return FareQuoteResponse(
         is_price_changed=is_price_changed,
         outbound=outbound_detail,
@@ -346,6 +360,8 @@ async def get_fare_quote(
         )
         or False,
         is_time_changed_inbound=is_time_changed_inbound,
+        verified_total_price_outbound=verified_total_price_outbound,
+        verified_total_price_inbound=verified_total_price_inbound,
     )
 
 

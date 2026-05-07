@@ -91,7 +91,10 @@ export default function FareModal({
       };
 
       const quoteResponse = await getFareQuoteAPI(payload);
-      const newPrice = quoteResponse?.outbound?.newPrice ?? fare.totalPrice;
+      const newPrice =
+        quoteResponse?.verifiedTotalPriceOutbound ??
+        quoteResponse?.outbound?.newPrice ??
+        fare.totalPrice;
 
       if (quoteResponse?.isPriceChanged && quoteResponse?.outbound) {
         setPriceChange({

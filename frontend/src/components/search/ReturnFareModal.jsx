@@ -132,7 +132,9 @@ export default function ReturnFareModal({
 
             const outFare = selectedFare.outbound;
             const outboundFinalPrice =
-                quoteResponse?.outbound?.newPrice ?? outFare.totalPrice;
+                quoteResponse?.verifiedTotalPriceOutbound ??
+                quoteResponse?.outbound?.newPrice ??
+                outFare.totalPrice;
             const isIntl = tripConfig.type === "international_return";
 
             navigate("/booking", {
@@ -167,6 +169,7 @@ export default function ReturnFareModal({
                               fareType: selectedFare.return.fareType,
                               segments: selectedFare.return.segments,
                               totalPrice:
+                                  quoteResponse?.verifiedTotalPriceInbound ??
                                   quoteResponse?.inbound?.newPrice ??
                                   selectedFare.return.totalPrice,
                               baseFare: selectedFare.return.baseFare,
