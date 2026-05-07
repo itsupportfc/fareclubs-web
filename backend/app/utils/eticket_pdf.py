@@ -198,11 +198,13 @@ def _extract_itinerary(raw: dict) -> dict | None:
 def _section_header(pdf: FPDF, title: str):
     pdf.set_font("Helvetica", "B", 11)
     pdf.set_text_color(31, 41, 55)
-    pdf.cell(0, 8, title)
-    pdf.ln(4)
+    # Advance Y past the full text cell before drawing the underline; otherwise
+    # fpdf2 keeps Y at the cell top and the line slices through the title text.
+    pdf.cell(0, 8, title, new_x="LMARGIN", new_y="NEXT")
     pdf.set_draw_color(59, 130, 246)
-    pdf.line(pdf.get_x(), pdf.get_y(), pdf.get_x() + 190, pdf.get_y())
-    pdf.ln(4)
+    y = pdf.get_y()
+    pdf.line(pdf.get_x(), y, pdf.get_x() + 190, y)
+    pdf.ln(3)
     pdf.set_text_color(0, 0, 0)
     pdf.set_draw_color(0, 0, 0)
 
