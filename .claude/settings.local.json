@@ -28,7 +28,8 @@
       "Bash(Select-String -Pattern \"\\(seed|airport|airline|init_db|load|bulk_insert\\)\" -List)",
       "Bash(Select-Object Path)",
       "Bash(Get-Unique)",
-      "Bash(Get-ChildItem *)"
+      "Bash(Get-ChildItem *)",
+      "Bash(grep -r \"@limiter\\\\\\\\.limit\" \"d:\\\\CSE\\\\Fareclubs\\\\Projects\\\\fareclubs-web\\\\backend\\\\app\" --include=\"*.py\")"
     ]
   }
 }

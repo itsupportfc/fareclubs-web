@@ -110,7 +110,7 @@ export async function getFareRulesAPI({ fareId, signal }) {
     const data = await response.json();
 
     if (!response.ok) {
-        throw new Error(data?.detail || "Failed to fetch fare rules");
+        throw new Error(data?.detail || "Failed to fetch fare rules"); 
     }
 
     return data;
