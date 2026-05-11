@@ -365,7 +365,7 @@ const useFlightStore = create((set, get) => ({
                     ...state.fareData,
                     [fareId]: {
                         ...(state.fareData[fareId] || {}),
-                        fareRules: response?.Response?.FareRules || [],
+                        fareRules: response?.fareRules || [],
                     },
                 },
                 isFareLoading: false,

@@ -100,17 +100,20 @@ export async function getFareRulesAPI({ fareId, signal }) {
         throw new Error("fareId is required for fare rules");
     }
 
-    const response = await fetch(`${API_BASE_URL}/flights/fare-rules`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fareId }),
-        signal,
-    });
+    const response = await fetch(
+        `${API_BASE_URL}/flights/fare-rules/${encodeURIComponent(fareId)}`,
+        {
+            method: "GET",
+            // headers: { "Content-Type": "application/json" },
+            // body: JSON.stringify({ fareId }),
+            signal,
+        },
+    );
 
     const data = await response.json();
 
     if (!response.ok) {
-        throw new Error(data?.detail || "Failed to fetch fare rules"); 
+        throw new Error(data?.detail || "Failed to fetch fare rules");
     }
 
     return data;

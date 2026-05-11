@@ -157,7 +157,7 @@ export default function FareModal({
           <div className="flex items-center gap-2">
             {firstSegment?.carrier?.code && (
               <img
-                src={`https://pics.avs.io/60/60/${firstSegment.carrier.code}.png`}
+                src={`http://localhost:8000/static/logos/${firstSegment.carrier.code}.gif`} 
                 alt={firstSegment?.carrier?.name}
                 className="w-6 h-6 object-contain"
                 onError={(e) => (e.target.style.display = "none")}
