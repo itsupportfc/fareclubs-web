@@ -552,7 +552,7 @@ class TBOTransformer:
             # See the LCC build site above for rationale: an international
             # roundtrip's outbound and inbound copies of the same code must
             # not collapse onto one segment.
-            for seg_options in raw_ssr.Response.Baggage:
+            for seg_options in raw_ssr.Response.Baggage or []:
                 leg_bag: dict[str, Baggage] = {}
                 for b in seg_options or []:
                     if b.WayType == 2:

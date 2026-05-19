@@ -723,16 +723,29 @@ class BookingCheckoutService:
                 )
                 background_tasks.add_task(send_staff_alert_email, subject, body)
 
-        if (
-            overall_status == BookingOverallStatus.CONFIRMED
-            and outbound_result.provider_raw
-            and outbound_transform.leg.provider_pnr
-        ):
-            background_tasks.add_task(
-                self._send_eticket_background,
-                outbound_result.provider_raw,
-                outbound_transform.leg.provider_pnr,
+        # Collect every confirmed leg (outbound + inbound for a domestic roundtrip)
+        # so the customer receives one email with one PDF per booked PNR.
+        # International-return and one-way trips have a single leg here; domestic
+        # roundtrips have two. The CONFIRMED-overall gate below ensures we only
+        # email when every leg is confirmed, so partial successes still alert
+        # staff via the existing failure path instead.
+        eticket_legs: list[tuple[dict, str]] = []
+        if outbound_result.provider_raw and outbound_transform.leg.provider_pnr:
+            eticket_legs.append(
+                (outbound_result.provider_raw, outbound_transform.leg.provider_pnr)
             )
+        if (
+            inbound_result
+            and inbound_transform
+            and inbound_result.provider_raw
+            and inbound_transform.leg.provider_pnr
+        ):
+            eticket_legs.append(
+                (inbound_result.provider_raw, inbound_transform.leg.provider_pnr)
+            )
+
+        if overall_status == BookingOverallStatus.CONFIRMED and eticket_legs:
+            background_tasks.add_task(self._send_eticket_background, eticket_legs)
 
         primary_passengers = outbound_transform.passengers or (
             inbound_transform.passengers if inbound_transform else None
@@ -1237,21 +1250,41 @@ class BookingCheckoutService:
         background_tasks.add_task(send_staff_alert_email, subject, html)
 
     async def _send_eticket_background(
-        self, provider_raw: dict, provider_pnr: str
+        self, legs: list[tuple[dict, str]]
     ) -> None:
-        """Generate and email the e-ticket in the background.
+        """Generate one PDF per leg and email all of them in a single message.
 
-        We only do this after a confirmed outbound leg because that is the minimum
-        happy-path customer experience already used in the current product.
+        `legs` is `[(provider_raw, pnr), ...]` in trip order (outbound first,
+        inbound second for domestic roundtrips; just one entry otherwise).
+
+        The lead passenger and recipient email are taken from the FIRST leg's
+        itinerary — the booking flow uses the same passenger list for every leg,
+        so this is safe and avoids redundant lookups. If the first leg has no
+        itinerary or no lead-passenger email we bail out (matches prior
+        behavior for the outbound-only case).
         """
+
+        # Belt-and-braces: caller already gates on a non-empty list, but bail
+        # cleanly if invoked with nothing to send.
+        if not legs:
+            return
+
+        # PNRs for logging — used in both the success-skip and failure paths
+        # so error messages identify which trip was affected.
+        pnrs = [pnr for _, pnr in legs]
 
         try:
             from app.utils.eticket_pdf import _extract_itinerary
 
-            itinerary = _extract_itinerary(provider_raw)
+            # The first leg drives recipient info. Same passengers are booked
+            # across every leg, so this is enough.
+            first_provider_raw, _first_pnr = legs[0]
+            itinerary = _extract_itinerary(first_provider_raw)
             if not itinerary:
                 logger.warning(
-                    "Cannot send e-ticket email: itinerary missing in provider_raw"
+                    "Cannot send e-ticket email: itinerary missing in provider_raw "
+                    "for PNR(s) %s",
+                    pnrs,
                 )
                 return
 
@@ -1262,21 +1295,29 @@ class BookingCheckoutService:
             )
             if not lead_passenger or not lead_passenger.get("Email"):
                 logger.info(
-                    "No lead passenger email available; skipping e-ticket email"
+                    "No lead passenger email available; skipping e-ticket email "
+                    "for PNR(s) %s",
+                    pnrs,
                 )
                 return
 
-            pdf_bytes = generate_eticket_pdf(provider_raw)
+            # Build one PDF per leg. `generate_eticket_pdf` already renders a
+            # single itinerary; we just call it once per leg and pair each PDF
+            # with its own PNR so attachments don't collide.
+            pdf_legs: list[tuple[str, bytes]] = [
+                (pnr, generate_eticket_pdf(provider_raw))
+                for provider_raw, pnr in legs
+            ]
+
             passenger_name = (
                 f"{lead_passenger.get('FirstName', '')} {lead_passenger.get('LastName', '')}"
             ).strip()
             await send_customer_eticket_email(
                 to_email=lead_passenger["Email"],
                 passenger_name=passenger_name,
-                pnr=provider_pnr,
-                pdf_bytes=pdf_bytes,
+                legs=pdf_legs,
             )
         except Exception:
             logger.exception(
-                "Background e-ticket email failed for PNR %s", provider_pnr
+                "Background e-ticket email failed for PNR(s) %s", pnrs
             )

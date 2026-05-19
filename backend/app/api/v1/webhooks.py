@@ -58,7 +58,12 @@ async def razorpay_webhook(
         )
         return {"status": "ignored"}
 
-    if event_type not in ("payment.captured", "payment.failed"):
+    # v1 scope: only payment.captured matters — that's the case where money
+    # moved and we'd otherwise lose the charge. Everything else (payment.failed,
+    # unsupported events) is acknowledged with 200 and dropped, because the
+    # Razorpay dashboard is the source of truth for failed attempts and we
+    # don't want a `failed` row blocking a future capture on the same order.
+    if event_type != "payment.captured":
         return {"status": "ignored", "event": event_type}
 
     existing = await db.execute(
@@ -74,11 +79,12 @@ async def razorpay_webhook(
         )
         return {"status": "ok", "action": "noop"}
 
-    new_status = (
-        PaymentStatus.CAPTURED.value
-        if event_type == "payment.captured"
-        else PaymentStatus.FAILED.value
-    )
+    # Orphan capture: customer paid but /confirm never landed (browser likely
+    # died after Razorpay redirect). Persist a stub Payment row keyed by
+    # order_id so that when /confirm does eventually arrive,
+    # get_or_create_captured_payment enriches this same row in place.
+    # NULL user_id / razorpay_signature here is intentional — /confirm is the
+    # only source we trust for those.
     db.add(
         Payment(
             user_id=None,
@@ -86,7 +92,7 @@ async def razorpay_webhook(
             razorpay_payment_id=payment_id,
             razorpay_signature=None,
             amount_paise=amount_paise,
-            status=new_status,
+            status=PaymentStatus.CAPTURED.value,
         )
     )
     await db.commit()
