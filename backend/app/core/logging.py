@@ -11,7 +11,7 @@ DEFAULT_REDACT_FIELDS = {
     "authorization",
     "password",
     "token",
-    "tokenid",
+    # "tokenid",
     "clientid",
     "jwt",
     "access_token",

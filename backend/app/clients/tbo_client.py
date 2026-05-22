@@ -70,6 +70,15 @@ ERROR_CODE_MAP = {
     TBOResponseStatus.AUTH_FAILED: ("AUTH_FAILED", 401),
 }
 
+# TBO error-message markers that indicate our cached token is no longer usable.
+# Extend this tuple if TBO surfaces a new variant.
+_STALE_TOKEN_ERROR_MARKERS: tuple[str, ...] = (
+    "token expired",
+    "authentication failed",
+    "invalid token",
+    "unable to load member",
+)
+
 
 class TBOClient:
     """Client to interact with TBO API."""
@@ -114,7 +123,7 @@ class TBOClient:
         }
         if settings.ENABLE_TBO_BODY_LOGGING:
             log_payload["payload"] = sanitize_for_logging(payload)
-        logger.info(json.dumps(log_payload, default=str,indent=2))
+        logger.info(json.dumps(log_payload, default=str, indent=2))
 
     def _log_tbo_response(
         self,
@@ -136,7 +145,7 @@ class TBOClient:
                     "duration_ms": round(elapsed_ms, 2),
                 },
                 default=str,
-                indent=2
+                indent=2,
             )
         )
 
@@ -229,11 +238,8 @@ class TBOClient:
         check_status: bool = True,
         critical: bool = False,
     ):
-        token = await self.authenticate()
         payload_data = payload.model_dump(by_alias=True, exclude_none=True, mode="json")
-        payload_data["TokenId"] = token
-
-        data = await self._post_tbo_json(
+        data = await self._post_with_stale_token_retry(
             operation=operation,
             url=f"{self.air_base_url}/{endpoint}",
             payload_data=payload_data,
@@ -419,13 +425,84 @@ class TBOClient:
             message=f"{context} Error: {error_msg}",
         )
 
+    def _is_stale_token_response(self, data: dict) -> bool:
+        """Return True if TBO is telling us our cached token is no longer usable.
+
+        Matched signals — all have Response.Response == null, so the request
+        never reached TBO's booking pipeline and retry is safe even for
+        non-idempotent operations (Book, Ticket):
+
+        - ResponseStatus 4 (SESSION_EXPIRED) or 5 (AUTH_FAILED): TBO's
+          documented codes for an invalidated session.
+        - ResponseStatus 2 (FAILED) carrying one of `_STALE_TOKEN_ERROR_MARKERS`
+          in its error message: the empirical case. TBO confirmed in writing
+          (2026-05-22) that auth failures often arrive this way.
+        """
+        response = data.get("Response") or {}
+        status = response.get("ResponseStatus")
+
+        if status in (TBOResponseStatus.SESSION_EXPIRED, TBOResponseStatus.AUTH_FAILED):
+            return True
+
+        if status == TBOResponseStatus.FAILED:
+            error = response.get("Error") or {}
+            message = (error.get("ErrorMessage") or "").lower()
+            return any(marker in message for marker in _STALE_TOKEN_ERROR_MARKERS)
+
+        return False
+
+    def _invalidate_token(self) -> None:
+        """Clear the cached TBO session so the next authenticate() re-auths.
+
+        Clears all four cache fields together so `logout()` (which requires
+        all of them) never sees a half-cleared state.
+        """
+        TBOClient._cached_token = None
+        TBOClient._cached_date = None
+        TBOClient._cached_agency_id = None
+        TBOClient._cached_member_id = None
+
+    async def _post_with_stale_token_retry(
+        self,
+        *,
+        operation: str,
+        url: str,
+        payload_data: dict,
+        timeout: float,
+    ) -> dict:
+        """POST a TBO request; on a stale-token response, re-auth and retry once.
+
+        Mutates `payload_data["TokenId"]` on each attempt. The caller is still
+        responsible for `_check_response_status` on the returned body — this
+        helper only handles the auth-replay case, so unrelated provider errors
+        surface through the normal path.
+        """
+        # Two attempts max: initial call + one retry after re-auth.
+        for attempt in range(2):
+            payload_data["TokenId"] = await self.authenticate()
+            data = await self._post_tbo_json(
+                operation=operation,
+                url=url,
+                payload_data=payload_data,
+                timeout=timeout,
+            )
+
+            is_first_attempt = attempt == 0
+            if is_first_attempt and self._is_stale_token_response(data):
+                logger.warning(
+                    "Stale TBO token on %s — invalidating cache and retrying once",
+                    operation,
+                )
+                self._invalidate_token()
+                continue
+            return data
+
+        return data  # Unreachable: the loop always returns or continues exactly once.
+
     async def search(self, payload: TBOSearchRequest) -> TBOSearchResponse:
         """Perform flight search"""
-        token = await self.authenticate()
         payload_data = payload.model_dump(by_alias=True, exclude_none=True, mode="json")
-        payload_data["TokenId"] = token
-
-        data = await self._post_tbo_json(
+        data = await self._post_with_stale_token_retry(
             operation="TBO Search",
             url=f"{self.air_base_url}/Search",
             payload_data=payload_data,

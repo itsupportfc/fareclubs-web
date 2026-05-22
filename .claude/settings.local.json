@@ -29,7 +29,8 @@
       "Bash(Select-Object Path)",
       "Bash(Get-Unique)",
       "Bash(Get-ChildItem *)",
-      "Bash(grep -r \"@limiter\\\\\\\\.limit\" \"d:\\\\CSE\\\\Fareclubs\\\\Projects\\\\fareclubs-web\\\\backend\\\\app\" --include=\"*.py\")"
+      "Bash(grep -r \"@limiter\\\\\\\\.limit\" \"d:\\\\CSE\\\\Fareclubs\\\\Projects\\\\fareclubs-web\\\\backend\\\\app\" --include=\"*.py\")",
+      "Bash(powershell *)"
     ]
   }
 }
