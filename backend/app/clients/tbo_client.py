@@ -9,9 +9,7 @@ from typing import Optional
 import httpx
 from app.clients.exceptions import ExternalProviderError
 from app.config import settings
-from app.core.logging import sanitize_for_logging, truncate_for_logging
-from pydantic import ValidationError
-
+from app.core.logging import sanitize_for_logging
 from app.schemas.tbo import (
     # Auth
     TBOAuthRequest,
@@ -42,13 +40,14 @@ from app.schemas.tbo import (
     TBOTicketResponse,
 )
 from app.schemas.tbo.search import Itinerary
+from pydantic import ValidationError
 
-# Dedicated logger name routes to the tbo_file handler in logging config
-logger = logging.getLogger("app.integrations.tbo")
+logger = logging.getLogger("app.clients.tbo")
 
 
 class TBOParseError(Exception):
     """Raised when TBO response JSON is valid but doesn't match our schema."""
+
     def __init__(self, message: str, raw_response: dict):
         super().__init__(message)
         self.raw_response = raw_response
@@ -71,23 +70,20 @@ ERROR_CODE_MAP = {
     TBOResponseStatus.AUTH_FAILED: ("AUTH_FAILED", 401),
 }
 
-_SEAT_UNAVAILABLE_MARKERS = (
-    "selected seat has already been reserved",
-    "seat has already been reserved",
-    "seat unavailable",
-)
-
-_MEAL_REQUIRED_MARKERS = (
-    "meal selection is mandatory",
-    "meal is mandatory",
-    "meal selection required",
+# TBO error-message markers that indicate our cached token is no longer usable.
+# Extend this tuple if TBO surfaces a new variant.
+_STALE_TOKEN_ERROR_MARKERS: tuple[str, ...] = (
+    "token expired",
+    "authentication failed",
+    "invalid token",
+    "unable to load member",
 )
 
 
 class TBOClient:
     """Client to interact with TBO API."""
 
-    _cached_token: Optional[str] = None
+    _cached_token: Optional[str] = None  # class-level attribute
     _cached_agency_id: Optional[int] = None
     _cached_member_id: Optional[int] = None
     _cached_date: Optional[str] = None  # YYYY-MM-DD
@@ -101,6 +97,23 @@ class TBOClient:
             "Content-Type": "application/json",
             "Accept-Encoding": "gzip",
         }
+        # Persistent HTTP client: one TCP connection pool for the whole process.
+        # Default timeout is modest; each call overrides via the 'timeout=' arg.
+        # `limits` caps total open connections so a burst of booking traffic
+        # doesn't open hundreds of sockets to TBO.
+        self._http_client = httpx.AsyncClient(
+            headers=self.headers,
+            timeout=httpx.Timeout(60, connect=10),
+            limits=httpx.Limits(
+                max_connections=50,
+                max_keepalive_connections=20,
+                keepalive_expiry=30.0,
+            ),
+        )
+
+    async def close(self) -> None:
+        """Close the underlying HTTP connection pool. Call from app shutdown."""
+        await self._http_client.aclose()
 
     def _log_tbo_request(self, *, operation: str, url: str, payload: dict) -> None:
         log_payload: dict = {
@@ -110,7 +123,7 @@ class TBOClient:
         }
         if settings.ENABLE_TBO_BODY_LOGGING:
             log_payload["payload"] = sanitize_for_logging(payload)
-        logger.info(json.dumps(log_payload, default=str))
+        logger.info(json.dumps(log_payload, default=str, indent=2))
 
     def _log_tbo_response(
         self,
@@ -122,26 +135,39 @@ class TBOClient:
         response_data: dict | None = None,
         raw_text: str | None = None,
     ) -> None:
-        # Always log metadata at INFO
-        log_meta = {
-            "event": "tbo.response",
-            "operation": operation,
-            "url": url,
-            "status_code": status_code,
-            "duration_ms": round(elapsed_ms, 2),
-        }
-        logger.info(json.dumps(log_meta, default=str))
+        logger.info(
+            json.dumps(
+                {
+                    "event": "tbo.response",
+                    "operation": operation,
+                    "url": url,
+                    "status_code": status_code,
+                    "duration_ms": round(elapsed_ms, 2),
+                },
+                default=str,
+                indent=2,
+            )
+        )
 
-        # Log response body at DEBUG only (can be very large for search responses)
-        if settings.ENABLE_TBO_BODY_LOGGING and logger.isEnabledFor(logging.DEBUG):
-            body_payload: dict = {"event": "tbo.response.body", "operation": operation}
-            if response_data is not None:
-                body_payload["body"] = sanitize_for_logging(response_data)
-            elif raw_text is not None:
-                body_payload["body"] = truncate_for_logging(
-                    raw_text, settings.LOG_MAX_BODY_CHARS
-                )
-            logger.debug(json.dumps(body_payload, default=str))
+        if not settings.ENABLE_TBO_BODY_LOGGING:
+            return
+
+        is_dev = settings.APP_ENV == "development"
+        body_level = logging.INFO if is_dev else logging.DEBUG
+        if not logger.isEnabledFor(body_level):
+            return
+
+        body_payload: dict = {"event": "tbo.response.body", "operation": operation}
+        if response_data is not None:
+            body_payload["body"] = sanitize_for_logging(response_data)
+        elif raw_text is not None:
+            # Raw text is usually a TBO error page — cap it
+            body_payload["body"] = raw_text[:12000]
+
+        logger.log(
+            body_level,
+            json.dumps(body_payload, default=str, indent=2 if is_dev else None),
+        )
 
     async def _post_tbo_json(
         self,
@@ -153,10 +179,13 @@ class TBOClient:
     ) -> dict:
         self._log_tbo_request(operation=operation, url=url, payload=payload_data)
 
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            started = time.perf_counter()
-            resp = await client.post(url, json=payload_data, headers=self.headers)
-            elapsed_ms = (time.perf_counter() - started) * 1000
+        started = time.perf_counter()
+        resp = await self._http_client.post(
+            url,
+            json=payload_data,
+            timeout=timeout,  # per-call override; keep-alive connection is reused
+        )
+        elapsed_ms = (time.perf_counter() - started) * 1000
 
         if resp.status_code != 200:
             self._log_tbo_response(
@@ -166,7 +195,11 @@ class TBOClient:
                 elapsed_ms=elapsed_ms,
                 raw_text=resp.text,
             )
-            raise Exception(f"{operation} failed (HTTP {resp.status_code})")
+            raise ExternalProviderError(
+                provider_code=f"{operation.upper()}_HTTP_{resp.status_code}",
+                message="Flight provider returned an error. Please try again.",
+                http_status=502,
+            )
 
         try:
             data = resp.json()
@@ -179,7 +212,11 @@ class TBOClient:
                 raw_text=resp.text,
             )
             logger.exception("Invalid or unexpected JSON in %s response", operation)
-            raise Exception(f"Invalid response from {operation}") from e
+            raise ExternalProviderError(
+                provider_code=f"{operation.upper()}_INVALID_RESPONSE",
+                message="Received an invalid response from the flight provider. Please try again.",
+                http_status=502,
+            ) from e
 
         self._log_tbo_response(
             operation=operation,
@@ -189,6 +226,42 @@ class TBOClient:
             response_data=data,
         )
         return data
+
+    async def _call_tbo_api(
+        self,
+        *,
+        operation: str,
+        endpoint: str,
+        payload,
+        response_model: type,
+        timeout: float,
+        check_status: bool = True,
+        critical: bool = False,
+    ):
+        payload_data = payload.model_dump(by_alias=True, exclude_none=True, mode="json")
+        data = await self._post_with_stale_token_retry(
+            operation=operation,
+            url=f"{self.air_base_url}/{endpoint}",
+            payload_data=payload_data,
+            timeout=timeout,
+        )
+
+        if check_status:
+            self._check_response_status(data, context=operation)
+
+        try:
+            return response_model(**data)
+        except Exception as e:
+            logger.exception("Failed to parse %s response", operation)
+            if critical:
+                raise TBOParseError(
+                    "Unexpected response structure from TBO", raw_response=data
+                ) from e
+            raise ExternalProviderError(
+                provider_code=f"{operation.upper().replace(' ', '_')}_PARSE_ERROR",
+                message="Received an invalid response from the flight provider.",
+                http_status=502,
+            ) from e
 
     async def authenticate(self) -> str:
         """
@@ -213,7 +286,9 @@ class TBOClient:
                 Password=settings.TBO_PASSWORD,
                 EndUserIp=settings.TBO_END_USER_IP,
             )
-            payload_data = payload.model_dump(by_alias=True, exclude_none=True, mode="json")
+            payload_data = payload.model_dump(
+                by_alias=True, exclude_none=True, mode="json"
+            )
             data = await self._post_tbo_json(
                 operation="TBO Authenticate",
                 url=f"{self.shared_base_url}/Authenticate",
@@ -224,8 +299,12 @@ class TBOClient:
             try:
                 parsed = TBOAuthResponse(**data)
             except Exception as e:
-                logger.exception("Invalid or unexpected JSON in TBO response")
-                raise Exception("Invalid or unexpected response from TBO") from e
+                logger.exception("Invalid or unexpected JSON in TBO auth response")
+                raise ExternalProviderError(
+                    provider_code="AUTH_PARSE_ERROR",
+                    message="Received an invalid response from the flight provider.",
+                    http_status=502,
+                ) from e
 
             # Successful = 1
             if parsed.Status != 1 or not parsed.TokenId:
@@ -235,16 +314,24 @@ class TBOClient:
                     else "Unknown authentication error"
                 )
                 logger.error("TBO Auth failed: %s", error_msg)
-                raise Exception(f"TBO Auth Error: {error_msg}")
+                raise ExternalProviderError(
+                    provider_code="AUTH_FAILED",
+                    message=f"TBO Auth Error: {error_msg}",
+                    http_status=502,
+                )
 
             # --- Cache the token until midnight ---
-            self._cached_token = parsed.TokenId
-            self._cached_date = today
-            self._cached_agency_id = parsed.Member.AgencyId if parsed.Member else None
-            self._cached_member_id = parsed.Member.MemberId if parsed.Member else None
+            TBOClient._cached_token = parsed.TokenId
+            TBOClient._cached_date = today
+            TBOClient._cached_agency_id = (
+                parsed.Member.AgencyId if parsed.Member else None
+            )
+            TBOClient._cached_member_id = (
+                parsed.Member.MemberId if parsed.Member else None
+            )
             logger.info("TBO token cached successfully until midnight UTC")
 
-            return self._cached_token
+            return TBOClient._cached_token
 
     async def get_token(self) -> str:
         """Public method to fetch (or reuse) a valid token."""
@@ -260,7 +347,11 @@ class TBOClient:
                 self._cached_token,
             ]
         ):
-            raise Exception("No active TBO session")
+            raise ExternalProviderError(
+                provider_code="LOGOUT_NO_SESSION",
+                message="No active TBO session.",
+                http_status=400,
+            )
 
         payload = TBOLogoutRequest(
             ClientId=settings.TBO_CLIENT_ID,
@@ -280,19 +371,27 @@ class TBOClient:
         try:
             parsed = TBOLogoutResponse(**data)
         except Exception as e:
-            logger.exception("Invalid or unexpected JSON in TBO logout response")
-            raise Exception("Invalid logout response from TBO") from e
+            logger.exception("Failed to parse TBO Logout response")
+            raise ExternalProviderError(
+                provider_code="LOGOUT_PARSE_ERROR",
+                message="Received an invalid response from the flight provider.",
+                http_status=502,
+            ) from e
 
         if parsed.Status != 1 or parsed.Error.ErrorCode != 0:
             error_msg = parsed.Error.ErrorMessage or "Unknown logout error"
             logger.error("TBO Logout failed: %s", error_msg)
-            raise Exception(f"TBO Logout Error: {error_msg}")
+            raise ExternalProviderError(
+                provider_code="LOGOUT_FAILED",
+                message=f"TBO Logout Error: {error_msg}",
+                http_status=502,
+            )
 
         # clear cached data
-        self._cached_token = None
-        self._cached_agency_id = None
-        self._cached_member_id = None
-        self._cached_date = None
+        TBOClient._cached_token = None
+        TBOClient._cached_agency_id = None
+        TBOClient._cached_member_id = None
+        TBOClient._cached_date = None
 
         return True
 
@@ -309,17 +408,9 @@ class TBOClient:
             tbo_response.get("Response", {}).get("Error", {}).get("ErrorMessage")
         )
 
-        normalized_msg = (error_msg or "").lower()
-        if any(marker in normalized_msg for marker in _SEAT_UNAVAILABLE_MARKERS):
-            provider_code = "SEAT_UNAVAILABLE"
-            http_status = 409
-        elif any(marker in normalized_msg for marker in _MEAL_REQUIRED_MARKERS):
-            provider_code = "MEAL_REQUIRED"
-            http_status = 400
-        else:
-            provider_code, http_status = ERROR_CODE_MAP.get(
-                error_code, ("UNKNOWN_ERROR", 500)
-            )
+        provider_code, http_status = ERROR_CODE_MAP.get(
+            error_code, ("UNKNOWN_ERROR", 500)
+        )
 
         logger.error(
             "%s ERROR (%s): %s",
@@ -334,27 +425,90 @@ class TBOClient:
             message=f"{context} Error: {error_msg}",
         )
 
-    async def search(self, payload: TBOSearchRequest) -> TBOSearchResponse:
-        """Perform flight search"""
-        token = await self.authenticate()
-        payload_data = payload.model_dump(by_alias=True, exclude_none=True, mode="json")
-        payload_data["TokenId"] = token
+    def _is_stale_token_response(self, data: dict) -> bool:
+        """Return True if TBO is telling us our cached token is no longer usable.
 
-        url = f"{self.air_base_url}/Search"
+        Matched signals — all have Response.Response == null, so the request
+        never reached TBO's booking pipeline and retry is safe even for
+        non-idempotent operations (Book, Ticket):
 
-        try:
+        - ResponseStatus 4 (SESSION_EXPIRED) or 5 (AUTH_FAILED): TBO's
+          documented codes for an invalidated session.
+        - ResponseStatus 2 (FAILED) carrying one of `_STALE_TOKEN_ERROR_MARKERS`
+          in its error message: the empirical case. TBO confirmed in writing
+          (2026-05-22) that auth failures often arrive this way.
+        """
+        response = data.get("Response") or {}
+        status = response.get("ResponseStatus")
+
+        if status in (TBOResponseStatus.SESSION_EXPIRED, TBOResponseStatus.AUTH_FAILED):
+            return True
+
+        if status == TBOResponseStatus.FAILED:
+            error = response.get("Error") or {}
+            message = (error.get("ErrorMessage") or "").lower()
+            return any(marker in message for marker in _STALE_TOKEN_ERROR_MARKERS)
+
+        return False
+
+    def _invalidate_token(self) -> None:
+        """Clear the cached TBO session so the next authenticate() re-auths.
+
+        Clears all four cache fields together so `logout()` (which requires
+        all of them) never sees a half-cleared state.
+        """
+        TBOClient._cached_token = None
+        TBOClient._cached_date = None
+        TBOClient._cached_agency_id = None
+        TBOClient._cached_member_id = None
+
+    async def _post_with_stale_token_retry(
+        self,
+        *,
+        operation: str,
+        url: str,
+        payload_data: dict,
+        timeout: float,
+    ) -> dict:
+        """POST a TBO request; on a stale-token response, re-auth and retry once.
+
+        Mutates `payload_data["TokenId"]` on each attempt. The caller is still
+        responsible for `_check_response_status` on the returned body — this
+        helper only handles the auth-replay case, so unrelated provider errors
+        surface through the normal path.
+        """
+        # Two attempts max: initial call + one retry after re-auth.
+        for attempt in range(2):
+            payload_data["TokenId"] = await self.authenticate()
             data = await self._post_tbo_json(
-                operation="TBO Search",
+                operation=operation,
                 url=url,
                 payload_data=payload_data,
-                timeout=360,
+                timeout=timeout,
             )
-            self._check_response_status(data, context="TBO Search")
-        except ExternalProviderError:
-            raise
-        except Exception as e:
-            logger.exception("Failed to parse TBO search response JSON")
-            raise Exception("Unexpected response structure from TBO") from e
+
+            is_first_attempt = attempt == 0
+            if is_first_attempt and self._is_stale_token_response(data):
+                logger.warning(
+                    "Stale TBO token on %s — invalidating cache and retrying once",
+                    operation,
+                )
+                self._invalidate_token()
+                continue
+            return data
+
+        return data  # Unreachable: the loop always returns or continues exactly once.
+
+    async def search(self, payload: TBOSearchRequest) -> TBOSearchResponse:
+        """Perform flight search"""
+        payload_data = payload.model_dump(by_alias=True, exclude_none=True, mode="json")
+        data = await self._post_with_stale_token_retry(
+            operation="TBO Search",
+            url=f"{self.air_base_url}/Search",
+            payload_data=payload_data,
+            timeout=360,
+        )
+        self._check_response_status(data, context="TBO Search")
 
         # Parse results individually — skip malformed itineraries instead of
         # failing the entire search.
@@ -379,8 +533,7 @@ class TBOClient:
                 filtered_results.append(valid_items)
 
             skipped = sum(
-                len(raw) - len(filt)
-                for raw, filt in zip(raw_results, filtered_results)
+                len(raw) - len(filt) for raw, filt in zip(raw_results, filtered_results)
             )
             if skipped:
                 logger.warning(
@@ -390,161 +543,77 @@ class TBOClient:
                 )
 
             data["Response"]["Results"] = filtered_results
-            parsed = TBOSearchResponse(**data)
-            return parsed
-        except ExternalProviderError:
-            raise
+            return TBOSearchResponse(**data)
         except Exception as e:
             logger.exception("Failed to validate TBO search response")
-            raise Exception("Unexpected response structure from TBO") from e
+            raise ExternalProviderError(
+                provider_code="TBO_SEARCH_PARSE_ERROR",
+                message="Received an invalid response from the flight provider.",
+                http_status=502,
+            ) from e
 
     async def get_fare_rule(self, payload: TBOFareRuleRequest) -> TBOFareRuleResponse:
-        token = await self.authenticate()
-        payload_data = payload.model_dump(by_alias=True, exclude_none=True, mode="json")
-        payload_data["TokenId"] = token
-
-        url = f"{self.air_base_url}/FareRule"
-        data = await self._post_tbo_json(
+        return await self._call_tbo_api(
             operation="TBO FareRule",
-            url=url,
-            payload_data=payload_data,
+            endpoint="FareRule",
+            payload=payload,
+            response_model=TBOFareRuleResponse,
             timeout=60,
         )
-
-        # try to parse the response
-        try:
-            self._check_response_status(data, context="TBO FareRule")
-
-            parsed = TBOFareRuleResponse(**data)
-            return parsed
-        except Exception as e:
-            logger.exception("Failed to parse TBO FareRule response")
-            raise Exception("Unexpected response structure from TBO") from e
 
     async def get_fare_quote(
         self, payload: TBOFareQuoteRequest
     ) -> TBOFareQuoteResponse:
-        token = await self.authenticate()
-        payload_data = payload.model_dump(by_alias=True, exclude_none=True, mode="json")
-        payload_data["TokenId"] = token
-
-        url = f"{self.air_base_url}/FareQuote"
-        data = await self._post_tbo_json(
+        return await self._call_tbo_api(
             operation="TBO FareQuote",
-            url=url,
-            payload_data=payload_data,
+            endpoint="FareQuote",
+            payload=payload,
+            response_model=TBOFareQuoteResponse,
             timeout=60,
         )
-
-        # try to parse the response
-        try:
-            self._check_response_status(data, context="TBO FareQuote")
-            parsed = TBOFareQuoteResponse(**data)
-            return parsed
-        except Exception as e:
-            logger.exception("Failed to parse TBO FareQuote response")
-            raise Exception("Unexpected response structure from TBO") from e
 
     async def get_ssr(self, payload: TBOSSRRequest) -> TBOSSRResponse:
-        token = await self.authenticate()
-        payload_data = payload.model_dump(by_alias=True, exclude_none=True, mode="json")
-        payload_data["TokenId"] = token
-
-        url = f"{self.air_base_url}/SSR"
-        data = await self._post_tbo_json(
+        return await self._call_tbo_api(
             operation="TBO SSR",
-            url=url,
-            payload_data=payload_data,
+            endpoint="SSR",
+            payload=payload,
+            response_model=TBOSSRResponse,
             timeout=60,
         )
 
-        try:
-            self._check_response_status(data, context="TBO SSR")
-
-            parsed = TBOSSRResponse(**data)
-            return parsed
-        except Exception as e:
-            logger.exception("Failed to parse TBO SSR response")
-            raise Exception("Unexpected response structure from TBO") from e
-
     async def book_flight(self, payload: TBOBookRequest) -> TBOBookResponse:
-        """Only non-LCC"""
-        token = await self.authenticate()
-        payload_data = payload.model_dump(by_alias=True, exclude_none=True, mode="json")
-        payload_data["TokenId"] = token
-
-        url = f"{self.air_base_url}/Book"
-        data = await self._post_tbo_json(
+        return await self._call_tbo_api(
             operation="TBO Book",
-            url=url,
-            payload_data=payload_data,
+            endpoint="Book",
+            payload=payload,
+            response_model=TBOBookResponse,
             timeout=300,
+            critical=True,
         )
-
-        # try to parse the response
-        try:
-            self._check_response_status(data, context="TBO Book")
-            parsed = TBOBookResponse(**data)
-            return parsed
-        except ExternalProviderError:
-            raise
-        except Exception as e:
-            logger.exception("Failed to parse TBO Book response")
-            raise TBOParseError("Unexpected response structure from TBO", raw_response=data) from e
 
     async def generate_ticket_lcc(
         self, payload: TBOTicketLCCRequest
     ) -> TBOTicketResponse:
-        """Generate ticket for LCC flights"""
-        token = await self.authenticate()
-        payload_data = payload.model_dump(by_alias=True, exclude_none=True, mode="json")
-        payload_data["TokenId"] = token
-
-        url = f"{self.air_base_url}/Ticket"
-        data = await self._post_tbo_json(
+        return await self._call_tbo_api(
             operation="TBO TicketLCC",
-            url=url,
-            payload_data=payload_data,
+            endpoint="Ticket",
+            payload=payload,
+            response_model=TBOTicketResponse,
             timeout=300,
+            critical=True,
         )
-
-        # try to parse the response
-        try:
-            self._check_response_status(data, context="TBO TicketLCC")
-            parsed = TBOTicketResponse(**data)
-            return parsed
-        except ExternalProviderError:
-            raise
-        except Exception as e:
-            logger.exception("Failed to parse TBO TicketLCC response")
-            raise TBOParseError("Unexpected response structure from TBO", raw_response=data) from e
 
     async def generate_ticket_nonlcc(
         self, payload: TBOTicketNonLCCRequest
     ) -> TBOTicketResponse:
-        """Generate ticket for non-LCC flights"""
-        token = await self.authenticate()
-        payload_data = payload.model_dump(by_alias=True, exclude_none=True, mode="json")
-        payload_data["TokenId"] = token
-
-        url = f"{self.air_base_url}/Ticket"
-        data = await self._post_tbo_json(
+        return await self._call_tbo_api(
             operation="TBO TicketNonLCC",
-            url=url,
-            payload_data=payload_data,
+            endpoint="Ticket",
+            payload=payload,
+            response_model=TBOTicketResponse,
             timeout=300,
+            critical=True,
         )
-
-        # try to parse the response
-        try:
-            self._check_response_status(data, context="TBO TicketNonLCC")
-            parsed = TBOTicketResponse(**data)
-            return parsed
-        except ExternalProviderError:
-            raise
-        except Exception as e:
-            logger.exception("Failed to parse TBO TicketNonLCC response")
-            raise TBOParseError("Unexpected response structure from TBO", raw_response=data) from e
 
     async def get_booking_details_with_retry(
         self,
@@ -629,23 +698,11 @@ class TBOClient:
     async def get_booking_details(
         self, payload: TBOGetBookingDetailsRequest
     ) -> TBOGetBookingDetailsResponse:
-        """Get booking details by PNR and Booking ID"""
-        token = await self.authenticate()
-        payload_data = payload.model_dump(by_alias=True, exclude_none=True, mode="json")
-        payload_data["TokenId"] = token
-
-        url = f"{self.air_base_url}/GetBookingDetails"
-        data = await self._post_tbo_json(
+        return await self._call_tbo_api(
             operation="TBO GetBookingDetails",
-            url=url,
-            payload_data=payload_data,
+            endpoint="GetBookingDetails",
+            payload=payload,
+            response_model=TBOGetBookingDetailsResponse,
             timeout=60,
+            check_status=False,
         )
-
-        # try to parse the response
-        try:
-            parsed = TBOGetBookingDetailsResponse(**data)
-            return parsed
-        except Exception as e:
-            logger.exception("Failed to parse TBO GetPNRDetails response")
-            raise Exception("Unexpected response structure from TBO") from e

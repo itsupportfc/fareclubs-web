@@ -45,26 +45,54 @@ async def send_staff_alert_email(subject: str, html_body: str) -> None:
 
 
 async def send_customer_eticket_email(
-    to_email: str, passenger_name: str, pnr: str, pdf_bytes: bytes
+    to_email: str,
+    passenger_name: str,
+    legs: list[tuple[str, bytes]],
 ) -> None:
-    """Send e-ticket PDF to customer. Silently skips if SMTP is not configured."""
+    """Send e-ticket PDF(s) to customer in a single email.
+
+    `legs` is a list of `(pnr, pdf_bytes)` tuples — one entry per booked leg.
+    For one-way / international-return there is one leg; for a domestic roundtrip
+    there are two (outbound first, inbound second). Each leg becomes one PDF
+    attachment, and every PNR is listed in both the subject and the body so the
+    customer sees all of them at a glance.
+
+    Silently skips if SMTP is not configured or `legs` is empty.
+    """
     if not settings.SMTP_HOST or not to_email:
         logger.debug("SMTP not configured or no email — skipping customer e-ticket email")
         return
+    if not legs:
+        # Defensive: the caller is expected to filter, but bail out gracefully.
+        logger.debug("No legs provided — skipping customer e-ticket email")
+        return
+
+    # Pull out all PNRs once for use in subject, body, and log line.
+    pnrs = [pnr for pnr, _ in legs]
+    pnr_label = "PNR" if len(pnrs) == 1 else "PNRs"
+    pnr_joined = " & ".join(pnrs)
 
     try:
         msg = MIMEMultipart("mixed")
-        msg["Subject"] = f"Your FareClubs E-Ticket \u2014 PNR {pnr}"
+        # Subject reads "... PNR ABC123" for one leg, "... PNRs ABC123 & XYZ789" for two.
+        msg["Subject"] = f"Your FareClubs E-Ticket — {pnr_label} {pnr_joined}"
         msg["From"] = settings.SMTP_FROM_EMAIL or settings.SMTP_USERNAME
         msg["To"] = to_email
 
+        # One <tr> per PNR. Labels stay neutral ("PNR") so this function does not
+        # need to know which leg is outbound vs inbound — the caller controls order.
+        pnr_rows = "".join(
+            f'<tr><td><strong>PNR</strong></td>'
+            f'<td style="font-size:18px;font-weight:bold;color:#4f46e5;">{pnr}</td></tr>'
+            for pnr in pnrs
+        )
         html_body = f"""
         <html><body style="font-family:sans-serif;font-size:14px;color:#333;">
         <h2 style="color:#1e40af;">Your E-Ticket is Ready!</h2>
         <p>Dear {passenger_name},</p>
         <p>Thank you for booking with <strong>FareClubs</strong>. Your flight has been confirmed.</p>
         <table style="border-collapse:collapse;" cellpadding="8">
-          <tr><td><strong>PNR</strong></td><td style="font-size:18px;font-weight:bold;color:#4f46e5;">{pnr}</td></tr>
+          {pnr_rows}
         </table>
         <p>Please find your e-ticket attached as a PDF. Carry a valid photo ID to the airport.</p>
         <p style="margin-top:24px;color:#999;font-size:12px;">
@@ -75,11 +103,16 @@ async def send_customer_eticket_email(
         """
         msg.attach(MIMEText(html_body, "html"))
 
-        pdf_attachment = MIMEApplication(pdf_bytes, _subtype="pdf")
-        pdf_attachment.add_header(
-            "Content-Disposition", "attachment", filename=f"FareClubs_ETicket_{pnr}.pdf"
-        )
-        msg.attach(pdf_attachment)
+        # Attach one PDF per leg. Filenames carry the PNR so the two attachments
+        # for a roundtrip don't collide.
+        for pnr, pdf_bytes in legs:
+            pdf_attachment = MIMEApplication(pdf_bytes, _subtype="pdf")
+            pdf_attachment.add_header(
+                "Content-Disposition",
+                "attachment",
+                filename=f"FareClubs_ETicket_{pnr}.pdf",
+            )
+            msg.attach(pdf_attachment)
 
         await aiosmtplib.send(
             msg,
@@ -89,7 +122,12 @@ async def send_customer_eticket_email(
             password=settings.SMTP_PASSWORD or None,
             start_tls=True,
         )
-        logger.info("Customer e-ticket email sent to %s for PNR %s", to_email, pnr)
+        logger.info(
+            "Customer e-ticket email sent to %s for %s %s",
+            to_email,
+            pnr_label,
+            pnr_joined,
+        )
     except Exception:
         logger.exception("Failed to send customer e-ticket email to %s", to_email)
 
@@ -140,6 +178,38 @@ def build_booking_failure_email(
     </body></html>
     """
 
+    return subject, html_body
+
+
+def build_orphan_payment_email(
+    razorpay_order_id: str,
+    razorpay_payment_id: str,
+    amount_paise: int,
+    event_type: str,
+) -> tuple[str, str]:
+    """Alert sent when a Razorpay webhook arrives for an order that has no
+    matching booking on our side (browser died after capture, before /confirm).
+    """
+    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+    subject = f"[ORPHAN PAYMENT] {event_type} — {razorpay_payment_id}"
+    html_body = f"""
+    <html><body style="font-family:sans-serif;font-size:14px;color:#333;">
+    <h2 style="color:#c0392b;">Orphan Razorpay Payment</h2>
+    <p>A webhook arrived for a payment with no matching booking record.
+    The customer was charged but no ticket was issued.</p>
+    <table style="border-collapse:collapse;" cellpadding="8">
+      <tr><td><strong>Timestamp</strong></td><td>{timestamp}</td></tr>
+      <tr><td><strong>Event</strong></td><td>{event_type}</td></tr>
+      <tr><td><strong>Razorpay Order ID</strong></td><td>{razorpay_order_id}</td></tr>
+      <tr><td><strong>Razorpay Payment ID</strong></td><td>{razorpay_payment_id}</td></tr>
+      <tr><td><strong>Amount</strong></td><td>₹{amount_paise / 100:.2f}</td></tr>
+    </table>
+    <p style="margin-top:16px;color:#c0392b;">
+      <strong>Action required:</strong> reach out to the customer to either reissue the ticket
+      manually or initiate a refund via the Razorpay dashboard.
+    </p>
+    </body></html>
+    """
     return subject, html_body
 
 

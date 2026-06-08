@@ -52,13 +52,27 @@ class LccSegmentSsrView(InternalBaseSchema):
     flight_number: str
     origin: str
     destination: str
-    meal_options: list[LccMealOptions] = Field(default_factory=list)
-    baggage_options: list[BaggageOptions] = Field(default_factory=list)
+    meal_options: list[LccMealOptions] = Field(
+        default_factory=list,
+        description="Segment-specific meals only (WayType=1).",
+    )
+    baggage_options: list[BaggageOptions] = Field(
+        default_factory=list,
+        description="Segment-specific baggage only (WayType=1).",
+    )
     seat_options: list[SeatRow] = Field(default_factory=list)
 
 
 class LccSsrView(InternalBaseSchema):
     type: Literal["lcc"] = "lcc"
+    journey_baggage: list[BaggageOptions] = Field(
+        default_factory=list,
+        description="Baggage that covers the entire journey (WayType=2).",
+    )
+    journey_meals: list[LccMealOptions] = Field(
+        default_factory=list,
+        description="Meals that cover the entire journey (WayType=2).",
+    )
     segments: list[LccSegmentSsrView]
 
 
@@ -78,7 +92,10 @@ class NonLccSegmentSsrView(InternalBaseSchema):
     flight_number: str
     origin: str
     destination: str
-    baggage_options: list[BaggageOptions] = Field(default_factory=list)
+    baggage_options: list[BaggageOptions] = Field(
+        default_factory=list,
+        description="Segment-specific baggage only (WayType=1).",
+    )
     seat_options: list[SeatRow] = Field(default_factory=list)
 
 
@@ -86,6 +103,10 @@ class NonLccSsrView(InternalBaseSchema):
     """SSR view for Non-LCC flights"""
 
     type: Literal["nonLcc"] = "nonLcc"
+    journey_baggage: list[BaggageOptions] = Field(
+        default_factory=list,
+        description="Baggage that covers the entire journey (WayType=2).",
+    )
     meal_preferences: list[MealPreference] = Field(
         default_factory=list,
         description="In nonLcc meals are paid for "

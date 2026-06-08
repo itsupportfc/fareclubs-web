@@ -82,6 +82,10 @@ const SeatsTab = ({ ssrData, travellers, selectedSeats, setSelectedSeats, hasInb
     const [trip, setTrip] = useState("outbound");
     const [segmentIndex, setSegmentIndex] = useState(0);
     const [activePax, setActivePax] = useState(0);
+    const handleTripChange = (t) => {
+        setTrip(t);
+        setSegmentIndex(0);
+    };
 
     const segments =
         trip === "outbound"
@@ -95,7 +99,7 @@ const SeatsTab = ({ ssrData, travellers, selectedSeats, setSelectedSeats, hasInb
 
     return (
         <>
-            <TripTabs active={trip} setActive={setTrip} hasInbound={hasInbound} />
+            <TripTabs active={trip} setActive={handleTripChange} hasInbound={hasInbound} />
             <LegTabs segments={segments} index={segmentIndex} setIndex={setSegmentIndex} />
             <PassengerSelector travellers={travellers} active={activePax} setActive={setActivePax} />
 
@@ -162,108 +166,219 @@ const SeatsTab = ({ ssrData, travellers, selectedSeats, setSelectedSeats, hasInb
 };
 
 /* ---- Meals Tab ---- */
-const MealsTab = ({ ssrData, travellers, selectedMeals, setSelectedMeals, hasInbound }) => {
+const MealsTab = ({
+    ssrData,
+    travellers,
+    selectedMeals,
+    setSelectedMeals,
+    selectedJourneyMeal,
+    setSelectedJourneyMeal,
+    hasInbound,
+}) => {
     const [trip, setTrip] = useState("outbound");
     const [segmentIndex, setSegmentIndex] = useState(0);
     const [activePax, setActivePax] = useState(0);
+    const handleTripChange = (t) => {
+        setTrip(t);
+        setSegmentIndex(0);
+    };
 
-    const segments =
-        trip === "outbound"
-            ? ssrData?.outbound?.segments
-            : ssrData?.inbound?.segments;
+    const tripData = trip === "outbound" ? ssrData?.outbound : ssrData?.inbound;
+    const segments = tripData?.segments;
+    const journeyMeals = uniqueByCode(tripData?.journeyMeals || []);
     const segment = segments?.[segmentIndex];
     const key = `${trip}-${segmentIndex}`;
-    const meals = uniqueByCode(segment?.mealOptions || []);
-    if (!meals.length)
-        return <p className="text-gray-500 text-sm">No meals available for this segment.</p>;
+    const segmentMeals = uniqueByCode(segment?.mealOptions || []);
 
     return (
         <>
-            <TripTabs active={trip} setActive={setTrip} hasInbound={hasInbound} />
-            <LegTabs segments={segments} index={segmentIndex} setIndex={setSegmentIndex} />
+            <TripTabs active={trip} setActive={handleTripChange} hasInbound={hasInbound} />
             <PassengerSelector travellers={travellers} active={activePax} setActive={setActivePax} />
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                {meals.map((m) => (
-                    <button
-                        key={m.code}
-                        onClick={() =>
-                            setSelectedMeals((p) => ({
-                                ...p,
-                                [key]: {
-                                    ...(p[key] || {}),
-                                    [activePax]: m,
-                                },
-                            }))
-                        }
-                        className={`border rounded-xl p-4 text-left transition-all duration-200 ${
-                            selectedMeals[key]?.[activePax]?.code === m.code
-                                ? "bg-green-50 border-green-400 ring-2 ring-green-200"
-                                : "bg-white border-gray-200 hover:border-gray-300 hover:shadow-sm"
-                        }`}
-                    >
-                        <p className="text-sm font-medium text-gray-800">
-                            {m.description || m.name}
-                        </p>
-                        <p className="text-sm font-bold text-green-700 mt-1">
-                            ₹{currencyFmt(m.price)}
-                        </p>
-                    </button>
-                ))}
-            </div>
+
+            {/* Journey-level meals — covers the entire trip */}
+            {journeyMeals.length > 0 && (
+                <div className="mb-6">
+                    <h3 className="text-sm font-semibold text-gray-800 mb-3">
+                        Meals for entire {trip === "outbound" ? "outbound" : "return"} trip
+                    </h3>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                        {journeyMeals.map((m) => {
+                            const isSelected =
+                                selectedJourneyMeal[trip]?.[activePax]?.code === m.code;
+                            return (
+                                <button
+                                    key={m.code}
+                                    onClick={() =>
+                                        setSelectedJourneyMeal((p) => ({
+                                            ...p,
+                                            [trip]: { ...(p[trip] || {}), [activePax]: m },
+                                        }))
+                                    }
+                                    className={`border rounded-xl p-4 text-left transition-all duration-200 ${
+                                        isSelected
+                                            ? "bg-green-50 border-green-400 ring-2 ring-green-200"
+                                            : "bg-white border-gray-200 hover:border-gray-300 hover:shadow-sm"
+                                    }`}
+                                >
+                                    <p className="text-sm font-medium text-gray-800">
+                                        {m.description || m.name}
+                                    </p>
+                                    <p className="text-sm font-bold text-green-700 mt-1">
+                                        ₹{currencyFmt(m.price)}
+                                    </p>
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
+
+            {/* Per-segment meals — only if any exist */}
+            {segmentMeals.length > 0 ? (
+                <>
+                    <LegTabs segments={segments} index={segmentIndex} setIndex={setSegmentIndex} />
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                        {segmentMeals.map((m) => (
+                            <button
+                                key={m.code}
+                                onClick={() =>
+                                    setSelectedMeals((p) => ({
+                                        ...p,
+                                        [key]: {
+                                            ...(p[key] || {}),
+                                            [activePax]: m,
+                                        },
+                                    }))
+                                }
+                                className={`border rounded-xl p-4 text-left transition-all duration-200 ${
+                                    selectedMeals[key]?.[activePax]?.code === m.code
+                                        ? "bg-green-50 border-green-400 ring-2 ring-green-200"
+                                        : "bg-white border-gray-200 hover:border-gray-300 hover:shadow-sm"
+                                }`}
+                            >
+                                <p className="text-sm font-medium text-gray-800">
+                                    {m.description || m.name}
+                                </p>
+                                <p className="text-sm font-bold text-green-700 mt-1">
+                                    ₹{currencyFmt(m.price)}
+                                </p>
+                            </button>
+                        ))}
+                    </div>
+                </>
+            ) : journeyMeals.length === 0 ? (
+                <p className="text-gray-500 text-sm">No meals available for this segment.</p>
+            ) : null}
         </>
     );
 };
 
 /* ---- Baggage Tab ---- */
-const BaggageTab = ({ ssrData, travellers, selectedBag, setSelectedBag, hasInbound }) => {
+const BaggageTab = ({
+    ssrData,
+    travellers,
+    selectedBag,
+    setSelectedBag,
+    selectedJourneyBag,
+    setSelectedJourneyBag,
+    hasInbound,
+}) => {
     const [trip, setTrip] = useState("outbound");
     const [segmentIndex, setSegmentIndex] = useState(0);
     const [activePax, setActivePax] = useState(0);
+    const handleTripChange = (t) => {
+        setTrip(t);
+        setSegmentIndex(0);
+    };
 
-    const segments =
-        trip === "outbound"
-            ? ssrData?.outbound?.segments
-            : ssrData?.inbound?.segments;
+    const tripData = trip === "outbound" ? ssrData?.outbound : ssrData?.inbound;
+    const segments = tripData?.segments;
+    const journeyBags = tripData?.journeyBaggage || [];
     const segment = segments?.[segmentIndex];
     const key = `${trip}-${segmentIndex}`;
-    const bags = segment?.baggageOptions || [];
-    if (!bags.length)
-        return <p className="text-gray-500 text-sm">No baggage options available.</p>;
+    const segmentBags = segment?.baggageOptions || [];
 
     return (
         <>
-            <TripTabs active={trip} setActive={setTrip} hasInbound={hasInbound} />
-            <LegTabs segments={segments} index={segmentIndex} setIndex={setSegmentIndex} />
+            <TripTabs active={trip} setActive={handleTripChange} hasInbound={hasInbound} />
             <PassengerSelector travellers={travellers} active={activePax} setActive={setActivePax} />
-            <div className="flex gap-4 flex-wrap">
-                {bags.map((b) => (
-                    <button
-                        key={b.code}
-                        onClick={() =>
-                            setSelectedBag((p) => ({
-                                ...p,
-                                [key]: {
-                                    ...(p[key] || {}),
-                                    [activePax]: b,
-                                },
-                            }))
-                        }
-                        className={`border rounded-xl px-5 py-4 text-center transition-all duration-200 min-w-[120px] ${
-                            selectedBag[key]?.[activePax]?.code === b.code
-                                ? "bg-green-50 border-green-400 ring-2 ring-green-200"
-                                : "bg-white border-gray-200 hover:border-gray-300 hover:shadow-sm"
-                        }`}
-                    >
-                        <Luggage className="w-5 h-5 mx-auto mb-1 text-gray-600" />
-                        <p className="text-sm font-semibold text-gray-800">
-                            {b.weight}kg
-                        </p>
-                        <p className="text-sm font-bold text-green-700">
-                            ₹{currencyFmt(b.price)}
-                        </p>
-                    </button>
-                ))}
-            </div>
+
+            {/* Journey-level baggage — covers the entire trip */}
+            {journeyBags.length > 0 && (
+                <div className="mb-6">
+                    <h3 className="text-sm font-semibold text-gray-800 mb-3">
+                        Baggage for entire {trip === "outbound" ? "outbound" : "return"} trip
+                    </h3>
+                    <div className="flex gap-4 flex-wrap">
+                        {journeyBags.map((b) => {
+                            const isSelected =
+                                selectedJourneyBag[trip]?.[activePax]?.code === b.code;
+                            return (
+                                <button
+                                    key={b.code}
+                                    onClick={() =>
+                                        setSelectedJourneyBag((p) => ({
+                                            ...p,
+                                            [trip]: { ...(p[trip] || {}), [activePax]: b },
+                                        }))
+                                    }
+                                    className={`border rounded-xl px-5 py-4 text-center min-w-[120px] transition-all duration-200 ${
+                                        isSelected
+                                            ? "bg-green-50 border-green-400 ring-2 ring-green-200"
+                                            : "bg-white border-gray-200 hover:border-gray-300 hover:shadow-sm"
+                                    }`}
+                                >
+                                    <Luggage className="w-5 h-5 mx-auto mb-1 text-gray-600" />
+                                    <p className="text-sm font-semibold text-gray-800">
+                                        {b.weight}kg
+                                    </p>
+                                    <p className="text-sm font-bold text-green-700">
+                                        ₹{currencyFmt(b.price)}
+                                    </p>
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
+
+            {/* Per-segment baggage — only if any exist */}
+            {segmentBags.length > 0 ? (
+                <>
+                    <LegTabs segments={segments} index={segmentIndex} setIndex={setSegmentIndex} />
+                    <div className="flex gap-4 flex-wrap">
+                        {segmentBags.map((b) => (
+                            <button
+                                key={b.code}
+                                onClick={() =>
+                                    setSelectedBag((p) => ({
+                                        ...p,
+                                        [key]: {
+                                            ...(p[key] || {}),
+                                            [activePax]: b,
+                                        },
+                                    }))
+                                }
+                                className={`border rounded-xl px-5 py-4 text-center transition-all duration-200 min-w-[120px] ${
+                                    selectedBag[key]?.[activePax]?.code === b.code
+                                        ? "bg-green-50 border-green-400 ring-2 ring-green-200"
+                                        : "bg-white border-gray-200 hover:border-gray-300 hover:shadow-sm"
+                                }`}
+                            >
+                                <Luggage className="w-5 h-5 mx-auto mb-1 text-gray-600" />
+                                <p className="text-sm font-semibold text-gray-800">
+                                    {b.weight}kg
+                                </p>
+                                <p className="text-sm font-bold text-green-700">
+                                    ₹{currencyFmt(b.price)}
+                                </p>
+                            </button>
+                        ))}
+                    </div>
+                </>
+            ) : journeyBags.length === 0 ? (
+                <p className="text-gray-500 text-sm">No baggage options available.</p>
+            ) : null}
         </>
     );
 };
@@ -279,6 +394,10 @@ export default function SSRModal({
     setSelectedMeals,
     selectedBag,
     setSelectedBag,
+    selectedJourneyMeal,
+    setSelectedJourneyMeal,
+    selectedJourneyBag,
+    setSelectedJourneyBag,
     onClose,
     hasInbound,
 }) {
@@ -352,6 +471,8 @@ export default function SSRModal({
                                     travellers={travellers}
                                     selectedMeals={selectedMeals}
                                     setSelectedMeals={setSelectedMeals}
+                                    selectedJourneyMeal={selectedJourneyMeal}
+                                    setSelectedJourneyMeal={setSelectedJourneyMeal}
                                     hasInbound={hasInbound}
                                 />
                             )}
@@ -361,6 +482,8 @@ export default function SSRModal({
                                     travellers={travellers}
                                     selectedBag={selectedBag}
                                     setSelectedBag={setSelectedBag}
+                                    selectedJourneyBag={selectedJourneyBag}
+                                    setSelectedJourneyBag={setSelectedJourneyBag}
                                     hasInbound={hasInbound}
                                 />
                             )}
@@ -375,6 +498,8 @@ export default function SSRModal({
                             setSelectedSeats({});
                             setSelectedMeals({});
                             setSelectedBag({});
+                            setSelectedJourneyMeal({});
+                            setSelectedJourneyBag({});
                             onClose();
                         }}
                         className="px-5 py-2 rounded-xl border border-gray-300 text-gray-700 hover:bg-gray-100 text-sm font-medium transition-colors duration-200"
@@ -384,7 +509,15 @@ export default function SSRModal({
                     <p className="font-bold text-gray-800">
                         SSR Total:{" "}
                         <span className="text-[#0047FF]">
-                            ₹{currencyFmt(computeSsrTotal(selectedSeats, selectedMeals, selectedBag))}
+                            ₹{currencyFmt(
+                                computeSsrTotal(
+                                    selectedSeats,
+                                    selectedMeals,
+                                    selectedBag,
+                                    selectedJourneyMeal,
+                                    selectedJourneyBag,
+                                ),
+                            )}
                         </span>
                     </p>
                     <button

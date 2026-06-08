@@ -18,6 +18,7 @@ class Settings(BaseSettings):
 
     RAZORPAY_KEY_ID: str
     RAZORPAY_KEY_SECRET: str
+    RAZORPAY_WEBHOOK_SECRET: str = ""  # set when webhook is configured in Razorpay dashboard
 
     # Redis — in docker-compose the hostname "redis" resolves to the redis container
     REDIS_URL: str = "redis://localhost:6379/0"
@@ -34,16 +35,11 @@ class Settings(BaseSettings):
     APP_ENV: str = "development"
     LOG_LEVEL: str = "INFO"
     LOG_RETENTION_DAYS: int = 14
-    LOG_MAX_BODY_CHARS: int = 12000
-    ENABLE_CONSOLE_LOGGING: bool = True
-    ENABLE_HTTP_BODY_LOGGING: bool = True
+    ENABLE_CONSOLE_LOGGING: bool = False
     ENABLE_TBO_BODY_LOGGING: bool = True
+    ENABLE_API_BODY_LOGGING: bool = False
     LOG_REDACT_FIELDS: str = ""
-
     BACKEND_LOG_DIR: str | None = None
-    BACKEND_LOG_FILE: str | None = None
-    INTERNAL_API_LOG_FILE: str | None = None
-    TBO_LOG_FILE: str | None = None
 
     class Config:
         env_file = Path(__file__).resolve().parent.parent / ".env"

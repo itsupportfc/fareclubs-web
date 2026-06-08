@@ -39,10 +39,19 @@ class BookingService:
         razorpay_signature: str,
         amount_paise: int,
     ) -> tuple[Payment, bool]:
-        """Idempotent payment creation.
+        """Idempotent payment creation, with enrichment for webhook-first stubs.
 
-        If the payment already exists we return it, which lets confirm_booking become
-        safe to retry after mobile refreshes or frontend timeouts.
+        Two paths land here:
+          1. /confirm arrives first — INSERT a fully-populated row (user_id,
+             signature, payment_id all set). Normal happy path.
+          2. The Razorpay webhook arrived first (browser died after Razorpay
+             capture) and already inserted a stub row with user_id and
+             razorpay_signature NULL. /confirm now shows up with those values —
+             fill in the missing fields in place.
+
+        Existing non-null values are never overwritten: the first writer of a
+        field wins, so a real /confirm signature can't be clobbered by a later
+        retry of the same /confirm.
         """
 
         result = await self.db.execute(
@@ -50,6 +59,26 @@ class BookingService:
         )
         existing_payment = result.scalar_one_or_none()
         if existing_payment is not None:
+            # Webhook-first stub had NULLs for user_id, signature, and payment_id.
+            # /confirm is the authoritative source for these, so backfill any
+            # field that is still missing.
+            enriched = False
+            if existing_payment.user_id is None and user_id is not None:
+                existing_payment.user_id = user_id
+                enriched = True
+            if not existing_payment.razorpay_signature and razorpay_signature:
+                existing_payment.razorpay_signature = razorpay_signature
+                enriched = True
+            if not existing_payment.razorpay_payment_id and razorpay_payment_id:
+                existing_payment.razorpay_payment_id = razorpay_payment_id
+                enriched = True
+            if enriched:
+                await self.db.flush()
+                logger.info(
+                    "Enriched webhook-first Payment id=%s order=%s",
+                    existing_payment.id,
+                    razorpay_order_id,
+                )
             return existing_payment, False
 
         payment = Payment(

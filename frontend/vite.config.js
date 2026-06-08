@@ -4,6 +4,7 @@ import tailwindcss from "@tailwindcss/vite";
 
 export default defineConfig({
     plugins: [tailwindcss(), react()],
+    esbuild: { drop: ["console", "debugger"] }, // Remove console and debugger in production
     build: {
         rollupOptions: {
             output: {
@@ -14,12 +15,6 @@ export default defineConfig({
                 },
             },
         },
-        minify: "terser",
-        terserOptions: {
-            compress: {
-                drop_console: true, // Remove console logs in production
-                drop_debugger: true, // Remove debugger statements
-            },
-        },
+        minify: "esbuild", // Use esbuild for faster minification
     },
 });

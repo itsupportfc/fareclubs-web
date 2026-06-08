@@ -33,7 +33,13 @@ export const uniqueByCode = (arr = []) => {
     return [...map.values()];
 };
 
-export function computeSsrTotal(seats, meals, bags) {
+export function computeSsrTotal(
+    seats,
+    meals,
+    bags,
+    journeyMeals = {},
+    journeyBags = {},
+) {
     const seatTotal = Object.values(seats)
         .flatMap((s) => Object.values(s || {}))
         .reduce((sum, s) => sum + (s?.price || 0), 0);
@@ -43,7 +49,15 @@ export function computeSsrTotal(seats, meals, bags) {
     const bagTotal = Object.values(bags)
         .flatMap((s) => Object.values(s || {}))
         .reduce((sum, b) => sum + (b?.price || 0), 0);
-    return seatTotal + mealTotal + bagTotal;
+    // Journey-level: one selection per (trip, passenger). Price applies once,
+    // not per-segment.
+    const journeyMealTotal = Object.values(journeyMeals)
+        .flatMap((s) => Object.values(s || {}))
+        .reduce((sum, m) => sum + (m?.price || 0), 0);
+    const journeyBagTotal = Object.values(journeyBags)
+        .flatMap((s) => Object.values(s || {}))
+        .reduce((sum, b) => sum + (b?.price || 0), 0);
+    return seatTotal + mealTotal + bagTotal + journeyMealTotal + journeyBagTotal;
 }
 
 export function buildSsr(passengerIndex, trip, segmentIndex, seats, meals, bags) {
@@ -58,4 +72,18 @@ export function buildSsr(passengerIndex, trip, segmentIndex, seats, meals, bags)
     const baggageCode = bagObj?.code || null;
     if (!seatCode && !mealCode && !baggageCode) return null;
     return { seatCode, seatDescription, mealCode, mealDescription, baggageCode };
+}
+
+/**
+ * Build the journey-level SSR object for one passenger / one trip direction.
+ * Returns null if the user picked nothing trip-wide.
+ */
+export function buildJourneySsr(passengerIndex, trip, journeyMeals, journeyBags) {
+    const meal = journeyMeals[trip]?.[passengerIndex];
+    const bag = journeyBags[trip]?.[passengerIndex];
+    if (!meal && !bag) return null;
+    return {
+        mealCode: meal?.code || null,
+        baggageCode: bag?.code || null,
+    };
 }

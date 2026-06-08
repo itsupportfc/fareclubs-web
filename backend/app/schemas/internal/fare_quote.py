@@ -24,22 +24,18 @@ class FlightPriceDetail(InternalBaseSchema):
 
 
 class PerPassengerFare(InternalBaseSchema):
-    """Per-HEAD fare for a specific passenger type.
+    """Display-only per-head fare summary for one passenger type.
 
-    TBO FareBreakdown gives aggregate fare per pax_type (e.g. total for 2 adults).
-    We divide by PassengerCount so the frontend can assign per-passenger fares
-    in the Book/Ticket request — TBO expects per-head, not aggregate.
+    The full TBO FareBreakdown is cached server-side as `fare_quote_{fare_id}`
+    and used directly when building the provider Book/Ticket passenger Fare
+    block. The frontend never sends provider fare components back.
     """
 
     pax_type: int  # 1=Adult, 2=Child, 3=Infant
     currency: str = "INR"
     base_fare: float
-    tax: float
-    yq_tax: float = 0
-    other_charges: float = 0
-    additional_txn_fee_ofrd: float = 0
-    additional_txn_fee_pub: float = 0
-    pg_charge: float = 0
+    taxes_and_surcharges: float
+    total_fare: float
 
 
 class FareQuoteFlags(InternalBaseSchema):
@@ -80,3 +76,21 @@ class FareQuoteResponse(InternalBaseSchema):
     # Schedule change detection
     is_time_changed_outbound: bool = False
     is_time_changed_inbound: bool = False
+
+    # Authoritative customer-payable totals from the fare-quote PublishedFare.
+    # Always populated, regardless of whether the price changed (the
+    # is_price_changed / outbound / inbound fields above only fire on user-
+    # visible bumps ≥ ₹50). The frontend uses these as the source of truth for
+    # outboundSelectedFare.totalPrice / returnSelectedFare.totalPrice so the
+    # client-side grand total stays in sync with verified_price_paise_*.
+    verified_total_price_outbound: float = Field(
+        description="PublishedFare for outbound (customer-payable total, in INR)"
+    )
+    verified_total_price_inbound: float | None = Field(
+        default=None,
+        description=(
+            "PublishedFare for inbound — set for domestic roundtrip only. "
+            "International roundtrip and oneway leave this None (the outbound "
+            "value covers the whole booking)."
+        ),
+    )

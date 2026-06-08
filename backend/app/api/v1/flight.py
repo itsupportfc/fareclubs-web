@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 
 from app.api.v1.dependencies import get_end_user_ip, get_tbo_client, get_tbo_transformer
@@ -19,21 +20,23 @@ from app.schemas.tbo import (
     TBOFareRuleRequest,
     TBOSSRRequest,
 )
+from app.schemas.tbo.ssr import TBOSSRResponse
 from app.transformers.tbo_transformer import TBOTransformer
 from app.utils.cache import get_flight_cache
+from app.utils.money import divide_money, money_to_float, rupees_to_paise, to_money
+from app.utils.single_flight import ssr_single_flight
+from app.core.rate_limit import limiter
 from fastapi import (
     APIRouter,
     Depends,
     HTTPException,
+    Request,
     status,
 )
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/flights", tags=["Flights"])
-limiter = Limiter(key_func=get_remote_address)
 
 
 # ==============================================================================
@@ -42,7 +45,9 @@ limiter = Limiter(key_func=get_remote_address)
 
 
 @router.post("/search", response_model=FlightSearchResponse)
+@limiter.limit("10/minute")
 async def search_flights(
+    request: Request,
     payload: FlightSearchRequest,
     client: TBOClient = Depends(get_tbo_client),
     transformer: TBOTransformer = Depends(get_tbo_transformer),
@@ -53,6 +58,11 @@ async def search_flights(
         tbo_response = await client.search(tbo_request)
         response = await transformer.transform_search_response(
             tbo_response, payload, cache
+        )
+        logger.log(
+            logging.INFO,
+            "Internal Search API",
+            json.dumps(response, default=str, indent=2),
         )
         return response
     except ExternalProviderError as e:
@@ -116,23 +126,33 @@ async def get_fare_rules(
 
 
 def _extract_per_passenger_fares(itinerary) -> list[PerPassengerFare]:
-    """Divide TBO FareBreakdown aggregate fares by PassengerCount to get per-head."""
-    results = []
-    for fb in itinerary.FareBreakdown:
+    """Display-only per-head fare summary.
+
+    NOT used to build the TBO Book/Ticket request — that uses cached FareQuote.
+    """
+    fare = getattr(itinerary, "Fare", None)
+    fare_breakdown = getattr(itinerary, "FareBreakdown", None) or []
+    if not fare or not fare_breakdown:
+        return []
+
+    total_pax = sum((fb.PassengerCount or 0) for fb in fare_breakdown) or 1
+    published_per_head = divide_money(fare.PublishedFare, total_pax)
+
+    results: list[PerPassengerFare] = []
+    for fb in fare_breakdown:
         count = fb.PassengerCount or 1
+        base_per_head = divide_money(fb.BaseFare, count)
+        # Everything between BaseFare and PublishedFare ends up here, regardless
+        # of which TBO component it came from (Tax, YQTax, AdditionalTxnFeePub,
+        # PGCharge, OtherCharges, ServiceFee, ...). One number, one meaning.
+        taxes_and_surcharges = to_money(published_per_head - base_per_head)
         results.append(
             PerPassengerFare(
-                pax_type=fb.PassengerType,
-                currency=fb.Currency,
-                base_fare=round(fb.BaseFare / count, 2),
-                tax=round(fb.Tax / count, 2),
-                yq_tax=round(fb.YQTax / count, 2),
-                other_charges=0,
-                additional_txn_fee_ofrd=round(
-                    (fb.AdditionalTxnFeeOfrd or 0) / count, 2
-                ),
-                additional_txn_fee_pub=round((fb.AdditionalTxnFeePub or 0) / count, 2),
-                pg_charge=round((fb.PGCharge or 0) / count, 2),
+                pax_type=int(fb.PassengerType),
+                currency=fb.Currency or "INR",
+                base_fare=money_to_float(base_per_head),
+                taxes_and_surcharges=money_to_float(taxes_and_surcharges),
+                total_fare=money_to_float(published_per_head),
             )
         )
     return results
@@ -210,14 +230,23 @@ async def get_fare_quote(
         f"flags_{payload.fare_id_outbound}", flags_outbound.model_dump(), ttl=900
     )
 
-    # Cache verified total fare for price validation at order creation
-    verified_outbound_total = (
-        outbound_tbo_response.Response.Results.Fare.BaseFare
-        + outbound_tbo_response.Response.Results.Fare.Tax
+    # Cache the FULL TBO FareQuote response. This is the canonical fare data —
+    # anything downstream (Book/Ticket request, FareBreakdown per pax type, mini
+    # fare rules) reads from here instead of from frontend-supplied values.
+    await cache.set_model(
+        f"fare_quote_{payload.fare_id_outbound}", outbound_tbo_response, ttl=900
+    )
+    # Cache customer-payable amount as integer PAISE.
+    # PublishedFare is TBO's contract for "amount to charge the customer" — it
+    # already includes BaseFare + Tax + OtherCharges + ServiceFee. Storing as
+    # int paise eliminates float-drift in downstream comparisons and makes the
+    # Razorpay handoff a direct pass-through.
+    verified_outbound_paise = rupees_to_paise(
+        outbound_tbo_response.Response.Results.Fare.PublishedFare
     )
     await cache.set(
-        f"verified_price_{payload.fare_id_outbound}",
-        verified_outbound_total,
+        f"verified_price_paise_{payload.fare_id_outbound}",
+        verified_outbound_paise,
         ttl=900,
     )
 
@@ -249,13 +278,17 @@ async def get_fare_quote(
                 flags_inbound.model_dump(),
                 ttl=900,
             )
-            verified_inbound_total = (
-                inbound_tbo_response.Response.Results.Fare.BaseFare
-                + inbound_tbo_response.Response.Results.Fare.Tax
+            await cache.set_model(
+                f"fare_quote_{payload.fare_id_inbound}",
+                inbound_tbo_response,
+                ttl=900,
+            )
+            verified_inbound_paise = rupees_to_paise(
+                inbound_tbo_response.Response.Results.Fare.PublishedFare
             )
             await cache.set(
-                f"verified_price_{payload.fare_id_inbound}",
-                verified_inbound_total,
+                f"verified_price_paise_{payload.fare_id_inbound}",
+                verified_inbound_paise,
                 ttl=900,
             )
 
@@ -263,9 +296,8 @@ async def get_fare_quote(
     outbound_price_changed = False
     outbound_detail = None
     if outbound_tbo_response.Response.IsPriceChanged:
-        new_outbound_price = (
-            outbound_tbo_response.Response.Results.Fare.BaseFare
-            + outbound_tbo_response.Response.Results.Fare.Tax
+        new_outbound_price = float(
+            outbound_tbo_response.Response.Results.Fare.PublishedFare
         )
         if new_outbound_price >= payload.initial_price_outbound + 50:
             outbound_price_changed = True
@@ -279,9 +311,8 @@ async def get_fare_quote(
     inbound_detail = None
     if inbound_tbo_response and payload.initial_price_inbound is not None:
         if inbound_tbo_response.Response.IsPriceChanged:
-            new_inbound_price = (
-                inbound_tbo_response.Response.Results.Fare.BaseFare
-                + inbound_tbo_response.Response.Results.Fare.Tax
+            new_inbound_price = float(
+                inbound_tbo_response.Response.Results.Fare.PublishedFare
             )
             if new_inbound_price >= payload.initial_price_inbound + 50:
                 inbound_price_changed = True
@@ -301,6 +332,20 @@ async def get_fare_quote(
             changes.append(f"Inbound increased by ₹{inbound_detail.difference:.2f}")
         message = " | ".join(changes)
 
+    # Authoritative customer-payable totals — always sent, so the frontend can
+    # sync outboundSelectedFare.totalPrice / returnSelectedFare.totalPrice with
+    # the same PublishedFare we just cached as verified_price_paise_*. Without
+    # this, fare-quote price drops (or sub-₹50 increases) leave the frontend on
+    # the stale search-time price and /create-order fails with Amount mismatch.
+    verified_total_price_outbound = float(
+        outbound_tbo_response.Response.Results.Fare.PublishedFare
+    )
+    verified_total_price_inbound: float | None = None
+    if inbound_tbo_response and not payload.is_international_return:
+        verified_total_price_inbound = float(
+            inbound_tbo_response.Response.Results.Fare.PublishedFare
+        )
+
     return FareQuoteResponse(
         is_price_changed=is_price_changed,
         outbound=outbound_detail,
@@ -315,6 +360,8 @@ async def get_fare_quote(
         )
         or False,
         is_time_changed_inbound=is_time_changed_inbound,
+        verified_total_price_outbound=verified_total_price_outbound,
+        verified_total_price_inbound=verified_total_price_inbound,
     )
 
 
@@ -323,7 +370,7 @@ async def get_fare_quote(
 # ==============================================================================
 
 
-@router.post("/ssr")
+@router.post("/ssr", response_model=SsrResponse)
 async def get_ssr_details(
     payload: SsrRequest,
     cache=Depends(get_flight_cache),
@@ -341,6 +388,29 @@ async def get_ssr_details(
     is_lcc_outbound = outbound_provider_ref.get("IsLCC", False)
     is_lcc_inbound = False
 
+    async def _fetch_ssr_with_cache(fare_id: str, req: TBOSSRRequest) -> TBOSSRResponse:
+        """Cache-lookup-first + single-flight fetch.
+
+        - Hit Redis first; on cache hit, no TBO call.
+        - On cache miss, SingleFlight collapses N concurrent misses into one
+          TBO call. The result is cached so future readers also get the hit.
+        """
+        cached = await cache.get_model(f"raw_ssr_{fare_id}", TBOSSRResponse)
+        if cached is not None:
+            return cached
+
+        async def _factory() -> TBOSSRResponse:
+            # Re-check under SingleFlight ownership: another caller may have
+            # populated the cache while we waited.
+            inner_cached = await cache.get_model(f"raw_ssr_{fare_id}", TBOSSRResponse)
+            if inner_cached is not None:
+                return inner_cached
+            resp = await client.get_ssr(req)
+            await cache.set_model(f"raw_ssr_{fare_id}", resp)
+            return resp
+
+        return await ssr_single_flight.do(f"ssr:{fare_id}", _factory)
+
     tasks = []
     out_req = TBOSSRRequest(
         EndUserIp=end_user_ip,
@@ -348,7 +418,7 @@ async def get_ssr_details(
         TraceId=outbound_provider_ref["TraceId"],
         ResultIndex=outbound_provider_ref["ResultIndex"],
     )
-    tasks.append(client.get_ssr(out_req))
+    tasks.append(_fetch_ssr_with_cache(payload.fare_id_outbound, out_req))
 
     if payload.trip_type == "roundtrip" and not payload.is_international_return:
         inbound_provider_ref = await cache.get(payload.fare_id_inbound)
@@ -364,15 +434,12 @@ async def get_ssr_details(
             TraceId=inbound_provider_ref["TraceId"],
             ResultIndex=inbound_provider_ref["ResultIndex"],
         )
-        tasks.append(client.get_ssr(in_req))
+        tasks.append(_fetch_ssr_with_cache(payload.fare_id_inbound, in_req))
 
     try:
         tbo_responses = await asyncio.gather(*tasks)
         outbound_ssr_response = tbo_responses[0]
-        # Store as Pydantic model for correct round-trip serialization
-        await cache.set_model(
-            f"raw_ssr_{payload.fare_id_outbound}", outbound_ssr_response
-        )
+        # _fetch_ssr_with_cache already wrote to Redis on miss; no extra cache.set here.
 
         if payload.is_international_return:
             if is_lcc_outbound:  # in this case inbound is also LCC, since it's the same fare with linked fares
@@ -444,9 +511,7 @@ async def get_ssr_details(
             inbound_view = None
             if len(tbo_responses) > 1:
                 inbound_ssr_response = tbo_responses[1]
-                await cache.set_model(
-                    f"raw_ssr_{payload.fare_id_inbound}", inbound_ssr_response
-                )
+                # _fetch_ssr_with_cache already cached on miss.
 
                 if is_lcc_inbound:
                     inbound_view = transformer.transform_lcc_ssr_response(
@@ -472,5 +537,19 @@ async def get_ssr_details(
                     )
 
         return SsrResponse(outbound=outbound_view, inbound=inbound_view)
-    except (ExternalProviderError, Exception):
-        return SsrResponse(outbound=None, inbound=None)
+    except ExternalProviderError as e:
+        # SSR provider degraded — surface as 503 so the frontend can show
+        # "Add-ons temporarily unavailable, retry" instead of an empty UI
+        # that lets the user proceed without seats/baggage they meant to buy.
+        logger.warning(
+            "SSR provider error for fare_id=%s: %s",
+            payload.fare_id_outbound,
+            e.message,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "code": "SSR_PROVIDER_DOWN",
+                "message": "Add-ons are temporarily unavailable. Please retry.",
+            },
+        ) from e

@@ -4,7 +4,7 @@ from app.db.database import get_db
 from app.db.models.air_data import Airport
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
-from sqlalchemy import or_, select
+from sqlalchemy import case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/airports", tags=["Airports"])
@@ -32,19 +32,35 @@ async def search_airports(
     Search airports by code, city name, or airport name.
     Returns matching airports for autocomplete.
     """
-    search_pattern = f"%{q}%"
+    # search_pattern = f"%{q}%"
+    q_clean = q.strip()
+    q_upper = q_clean.upper()
+    exact = q_upper
+    prefix = f"{q_clean}%"
+    contains = f"%{q_clean}%"
+
+    rank = case(
+        (func.upper(Airport.airport_code) == exact, 0),
+        (func.upper(Airport.city_code) == exact, 1),
+        (Airport.city_name.ilike(prefix), 2),
+        (Airport.airport_name.ilike(prefix), 3),
+        else_=9,
+    )
 
     # Search in airport_code, city_name, city_code, and airport_name
     query = (
         select(Airport)
         .where(
             or_(
-                Airport.airport_code.ilike(search_pattern),
-                Airport.city_code.ilike(search_pattern),
-                Airport.city_name.ilike(search_pattern),
-                Airport.airport_name.ilike(search_pattern),
+                Airport.airport_code.ilike(contains),
+                Airport.city_code.ilike(contains),
+                Airport.city_name.ilike(contains),
+                Airport.airport_name.ilike(contains),
             )
         )
+        .where(Airport.airport_name.is_not(None))
+        .where(func.lower(Airport.airport_name) != "nan")
+        .order_by(rank, Airport.city_name, Airport.airport_name)
         .limit(limit)
     )
 

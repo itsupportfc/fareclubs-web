@@ -8,6 +8,7 @@ import logging
 
 from app.api.v1.auth import get_optional_current_user
 from app.api.v1.dependencies import get_end_user_ip, get_tbo_client, get_tbo_transformer
+from app.core.rate_limit import limiter
 from app.db.database import get_db
 from app.db.models.user import User
 from app.domain.booking_enums import BookingRecordStatus
@@ -32,13 +33,10 @@ from fastapi import (
     Response,
     status,
 )
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/flights/booking", tags=["Flight Booking"])
-limiter = Limiter(key_func=get_remote_address)
 
 
 def _get_checkout_service(
