@@ -37,6 +37,7 @@ class Settings(BaseSettings):
     LOG_RETENTION_DAYS: int = 14
     ENABLE_CONSOLE_LOGGING: bool = False
     ENABLE_TBO_BODY_LOGGING: bool = True
+    ENABLE_API_BODY_LOGGING: bool = False
     LOG_REDACT_FIELDS: str = ""
     BACKEND_LOG_DIR: str | None = None
 

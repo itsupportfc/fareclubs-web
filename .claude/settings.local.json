@@ -30,7 +30,9 @@
       "Bash(Get-Unique)",
       "Bash(Get-ChildItem *)",
       "Bash(grep -r \"@limiter\\\\\\\\.limit\" \"d:\\\\CSE\\\\Fareclubs\\\\Projects\\\\fareclubs-web\\\\backend\\\\app\" --include=\"*.py\")",
-      "Bash(powershell *)"
+      "Bash(powershell *)",
+      "Bash(awk -F': ' '{print $2}')",
+      "Bash(grep -v '^--$')"
     ]
   }
 }

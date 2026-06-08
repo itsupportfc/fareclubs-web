@@ -14,6 +14,8 @@ import logging
 import time
 from typing import Any
 
+from app.config import settings
+
 logger = logging.getLogger("app.api.response")
 
 # Cap any single body we serialise into the log — covers SSR responses and
@@ -135,8 +137,12 @@ class ResponseLoggingMiddleware:
 
         duration_ms = round((time.perf_counter() - started_at) * 1000, 2)
 
-        request_body = _redact(_decode_body(b"".join(request_body_parts)))
-        response_body = _decode_body(b"".join(response_body_parts))
+        request_body = None
+        response_body = None
+
+        if settings.ENABLE_API_BODY_LOGGING:
+            request_body = _redact(_decode_body(b"".join(request_body_parts)))
+            response_body = _decode_body(b"".join(response_body_parts))
 
         headers_dict = {
             key.decode("latin-1"): value.decode("latin-1")
@@ -153,5 +159,9 @@ class ResponseLoggingMiddleware:
             "response_headers": headers_dict,
             "response_body": response_body,
         }
+
+        if settings.APP_ENV == "production" and (status_code or 0) < 500:
+            # In production, log only errors to avoid log bloat. In other envs, log everything.
+            return
 
         logger.info(json.dumps(log_payload, ensure_ascii=False, default=str, indent=2))

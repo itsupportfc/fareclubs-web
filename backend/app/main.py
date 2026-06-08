@@ -46,7 +46,11 @@ app.add_middleware(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],  # change in production
+    allow_origins=[
+        "http://localhost:5173",
+        "https://fareclubs.com",
+        "https://www.fareclubs.com",
+    ],  # change in production
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "X-Request-ID"],

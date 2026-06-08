@@ -26,3 +26,14 @@ redis_data/
 
 # MD files
 *.md
+
+
+.venv/
+venv/
+venv_old_pip/
+.venv_old_pip/
+__pycache__/
+*.pyc
+.env
+.env.*
+*.txt
