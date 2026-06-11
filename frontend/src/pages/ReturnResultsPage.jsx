@@ -8,6 +8,7 @@ import ReturnFareModal from "../components/search/ReturnFareModal";
 import FlightSearchLoader from "../components/common/FlightSearchLoader";
 import { useTripConfig } from "../hooks/useTripConfig";
 import { filterFlights } from "../utils/flightFilters";
+import { getAirlineLogo } from "../utils/formatters";
 import { useShallow } from "zustand/react/shallow";
 
 /* ================= HELPERS ================= */
@@ -405,8 +406,12 @@ function FlightCard({ flight, isSelected, onSelect, onShowDetails }) {
             <div className="flex justify-between items-center">
                 <div className="flex gap-4">
                     <img
-                        src={`https://pics.avs.io/60/60/${first.carrier.code}.png`}
-                        className="w-10 h-10"
+                        src={getAirlineLogo(first.carrier.code)}
+                        className="w-10 h-10 object-contain"
+                        alt={first.carrier.name}
+                        onError={(e) => {
+                            e.currentTarget.src = `${import.meta.env.VITE_BACKEND_BASE_URL || ""}/static/logos/nologo.gif`;
+                        }}
                     />
                     <div>
                         <div className="font-semibold">
@@ -453,8 +458,12 @@ function FooterFlight({ title, flight, legs: legsOverride, onShowDetails }) {
     return (
         <div className="flex items-center gap-4">
             <img
-                src={`https://pics.avs.io/60/60/${first.carrier.code}.png`}
-                className="w-10 h-10"
+                src={getAirlineLogo(first.carrier.code)}
+                className="w-10 h-10 object-contain"
+                alt={first.carrier.name}
+                onError={(e) => {
+                    e.currentTarget.src = `${import.meta.env.VITE_BACKEND_BASE_URL || ""}/static/logos/nologo.gif`;
+                }}
             />
             <div>
                 <div className="text-sm text-gray-300">
@@ -672,8 +681,12 @@ function InternationalFlightCard({
             <div className="grid grid-cols-2 gap-4">
                 <div className="flex gap-3">
                     <img
-                        src={`https://pics.avs.io/60/60/${outFirst.carrier.code}.png`}
-                        className="w-8 h-8 mt-1"
+                        src={getAirlineLogo(outFirst.carrier.code)}
+                        className="w-8 h-8 mt-1 object-contain"
+                        alt={outFirst.carrier.name}
+                        onError={(e) => {
+                            e.currentTarget.src = `${import.meta.env.VITE_BACKEND_BASE_URL || ""}/static/logos/nologo.gif`;
+                        }}
                     />
                     <div>
                         <div className="text-xs font-semibold text-gray-400 uppercase mb-1">
@@ -694,8 +707,12 @@ function InternationalFlightCard({
                 </div>
                 <div className="flex gap-3">
                     <img
-                        src={`https://pics.avs.io/60/60/${inFirst.carrier.code}.png`}
-                        className="w-8 h-8 mt-1"
+                        src={getAirlineLogo(inFirst.carrier.code)}
+                        className="w-8 h-8 mt-1 object-contain"
+                        alt={inFirst.carrier.name}
+                        onError={(e) => {
+                            e.currentTarget.src = `${import.meta.env.VITE_BACKEND_BASE_URL || ""}/static/logos/nologo.gif`;
+                        }}
                     />
                     <div>
                         <div className="text-xs font-semibold text-gray-400 uppercase mb-1">

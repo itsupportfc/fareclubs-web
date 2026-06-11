@@ -37,3 +37,25 @@ input, select, textarea {
 .font-display {
   font-family: 'DM Serif Display', serif !important;
 }
+
+@keyframes fareclubsTicker {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(-100%);
+  }
+}
+
+.fareclubs-ticker {
+  display: inline-block;
+  min-width: 100%;
+  animation: fareclubsTicker 18s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fareclubs-ticker {
+    animation: none;
+    text-align: center;
+  }
+}

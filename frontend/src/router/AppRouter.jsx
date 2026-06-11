@@ -11,7 +11,11 @@ const BookingPage = lazy(() => import("../pages/BookingPage"));
 const BookingConfirmationPage = lazy(
     () => import("../pages/BookingConfirmationPage"),
 );
-
+const ComingSoonPage = lazy(() => import("../pages/ComingSoonPage"));
+const LoginPage = lazy(() => import("../pages/LoginPage"));
+const SignupPage = lazy(() => import("../pages/SignupPage"));
+const ProfilePage = lazy(() => import("../pages/ProfilePage"));
+const LegalPage = lazy(() => import("../pages/LegalPage"));
 // Lightweight fallback rendered before the page chunk is available
 function PageLoader() {
     return (
@@ -57,6 +61,29 @@ export default function AppRouter() {
                     <Route
                         path="/booking/confirmation"
                         element={<BookingConfirmationPage />}
+                    />
+                    <Route
+                        path="/hotels"
+                        element={<ComingSoonPage type="hotels" />}
+                    />
+                    <Route
+                        path="/buses"
+                        element={<ComingSoonPage type="buses" />}
+                    />
+                    <Route path="/login" element={<LoginPage />} />
+                    <Route path="/signup" element={<SignupPage />} />
+                    <Route path="/profile" element={<ProfilePage />} />
+                    <Route
+                        path="/privacy-policy"
+                        element={<LegalPage type="privacy" />}
+                    />
+                    <Route
+                        path="/terms-and-conditions"
+                        element={<LegalPage type="terms" />}
+                    />
+                    <Route
+                        path="/booking-cancellation-refunds"
+                        element={<LegalPage type="booking" />}
                     />
                     <Route path="*" element={<NotFound />} />
                 </Routes>

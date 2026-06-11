@@ -1,10 +1,10 @@
 import React from "react";
+import { Link } from "react-router-dom";
 import {
     FaFacebookF,
     FaInstagram,
     FaLinkedinIn,
     FaYoutube,
-    FaTwitter,
 } from "react-icons/fa";
 
 // Importing images correctly
@@ -62,9 +62,9 @@ const Footer = () => {
                             <li className="hover:text-gray-700 transition-colors duration-200">
                                 Hotels
                             </li>
-                            <li className="hover:text-gray-700 transition-colors duration-200">
+                            {/* <li className="hover:text-gray-700 transition-colors duration-200">
                                 Fare Calendar
-                            </li>
+                            </li> */}
                             <li className="hover:text-gray-700 transition-colors duration-200">
                                 Print E-ticket
                             </li>
@@ -83,11 +83,29 @@ const Footer = () => {
                             <li className="hover:text-gray-700 transition-colors duration-200">
                                 Register with Us
                             </li>
-                            <li className="hover:text-gray-700 transition-colors duration-200">
-                                Terms and Conditions
+                            <li>
+                                <Link
+                                    to="/terms-and-conditions"
+                                    className="hover:text-gray-700 transition-colors duration-200"
+                                >
+                                    Terms and Conditions
+                                </Link>
                             </li>
-                            <li className="hover:text-gray-700 transition-colors duration-200">
-                                Privacy Policy
+                            <li>
+                                <Link
+                                    to="/privacy-policy"
+                                    className="hover:text-gray-700 transition-colors duration-200"
+                                >
+                                    Privacy Policy
+                                </Link>
+                            </li>
+                            <li>
+                                <Link
+                                    to="/booking-cancellation-refunds"
+                                    className="hover:text-gray-700 transition-colors duration-200"
+                                >
+                                    Booking, Cancellation and Refunds
+                                </Link>
                             </li>
                         </ul>
                     </div>
@@ -117,11 +135,41 @@ const Footer = () => {
                         FOLLOW US ON
                     </h4>
                     <div className="flex justify-center lg:justify-start items-center gap-5 text-2xl">
-                        <FaFacebookF className="text-blue-600 hover:scale-110 transition-transform duration-200" />
-                        <FaYoutube className="text-red-500 hover:scale-110 transition-transform duration-200" />
-                        <FaInstagram className="text-pink-500 hover:scale-110 transition-transform duration-200" />
-                        <FaLinkedinIn className="text-blue-700 hover:scale-110 transition-transform duration-200" />
-                        <FaTwitter className="text-gray-800 hover:scale-110 transition-transform duration-200" />
+                        <a
+                            href="https://www.facebook.com/fareclubs"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            aria-label="Fareclubs on Facebook"
+                        >
+                            <FaFacebookF className="text-blue-600 hover:scale-110 transition-transform duration-200" />
+                        </a>
+
+                        <a
+                            href="https://www.youtube.com/@Fareclubss"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            aria-label="Fareclubs on YouTube"
+                        >
+                            <FaYoutube className="text-red-500 hover:scale-110 transition-transform duration-200" />
+                        </a>
+
+                        <a
+                            href="https://www.instagram.com/fareclubs/"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            aria-label="Fareclubs on Instagram"
+                        >
+                            <FaInstagram className="text-pink-500 hover:scale-110 transition-transform duration-200" />
+                        </a>
+
+                        <a
+                            href="https://www.linkedin.com/company/fareclubss/?originalSubdomain=in"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            aria-label="Fareclubs on LinkedIn"
+                        >
+                            <FaLinkedinIn className="text-blue-700 hover:scale-110 transition-transform duration-200" />
+                        </a>
                     </div>
                 </div>
 

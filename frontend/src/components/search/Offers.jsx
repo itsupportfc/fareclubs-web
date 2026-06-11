@@ -1,5 +1,7 @@
 import React from "react";
 import { motion } from "framer-motion";
+import flightDealsImage from "../../assets/flightdeals.webp";
+import soloTravellerImage from "../../assets/solotraveller.avif";
 
 const Offers = () => {
   const offers = [
@@ -7,13 +9,13 @@ const Offers = () => {
       id: 1,
       title: "Festive Flight Sale",
       desc: "Get up to 25% off on all domestic flights this festive season! Limited time only.",
-      img: "https://www.shutterstock.com/image-vector/3d-hand-holding-couple-flight-600nw-2641682345.jpg",
+      img: flightDealsImage,
     },
     {
       id: 2,
       title: "International Escape Deal",
       desc: "Flat ₹5000 off on top international destinations — explore the world for less!",
-      img: "https://images.unsplash.com/photo-1526772662000-3f88f10405ff?auto=format&fit=crop&w=1000&q=80",
+      img: soloTravellerImage,
     },
   ];
 

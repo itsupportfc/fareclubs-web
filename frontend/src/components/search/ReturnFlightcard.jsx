@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Plane } from "lucide-react";
+import { getAirlineLogo } from "../../utils/formatters";
 
 /**
  * Extract normalized flight data from NEW API JSON
@@ -63,9 +64,12 @@ export default function ReturnFlightCard({
         <div className="flex items-center gap-3 min-w-[160px]">
           {data.airlineCode && (
             <img
-              src={`https://pics.avs.io/60/60/${data.airlineCode}.png`}
-              className="w-10 h-10"
+              src={getAirlineLogo(data.airlineCode)}
+              className="w-10 h-10 object-contain"
               alt={data.airlineName}
+              onError={(e) => {
+                e.currentTarget.src = `${import.meta.env.VITE_BACKEND_BASE_URL || ""}/static/logos/nologo.gif`;
+              }}
             />
           )}
           <div>
