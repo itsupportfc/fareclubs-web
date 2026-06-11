@@ -4,11 +4,10 @@ import { toast } from "sonner";
 import useFlightStore from "../../store/useFlightStore";
 import AirportAutocomplete from "../AirportAutocomplete";
 import { useShallow } from "zustand/react/shallow";
-const images = [
-    "https://www.fareclubs.com/nav/file/2/Zero",
-    "https://www.fareclubs.com/nav/file/2/Ebix",
-    "https://www.fareclubs.com/nav/file/2/fataka",
-];
+import serviceFeeImage from "../../assets/servicefee.png";
+import fatakPayImage from "../../assets/fatakpay.jpeg";
+
+const images = [serviceFeeImage, fatakPayImage];
 
 function SearchPanel() {
     const navigate = useNavigate();
@@ -140,7 +139,14 @@ function SearchPanel() {
 
     return (
         <section className="w-full pt-20 lg:pt-24">
-            <div className="w-full px-6 sm:px-8 lg:px-12 xl:px-16 2xl:px-20">
+            <div className="w-full overflow-hidden bg-[#0B1D33] text-white">
+                <div className="fareclubs-ticker whitespace-nowrap py-1.5 text-xs sm:text-sm font-medium">
+                    We're upgrading Fareclubs. A faster, improved experience
+                    will be live soon.
+                </div>
+            </div>
+
+            <div className="w-full px-6 sm:px-8 lg:px-12 xl:px-16 2xl:px-20 mt-5">
                 <div className="w-full gap-8 lg:gap-12 flex flex-col lg:flex-row items-stretch">
                     {/* LEFT FORM */}
                     <div className="w-full lg:w-1/2 bg-white shadow-xl p-5 sm:p-6 lg:p-8 xl:py-15  2xl:p-12">
@@ -346,13 +352,12 @@ function SearchPanel() {
                             </button>
                         </form>
                     </div>
-
                     {/* RIGHT IMAGE */}
-                    <div className="hidden lg:block lg:w-1/2 w-full">
+                    <div className="hidden lg:flex lg:w-1/2 w-full bg-white shadow-xl overflow-hidden h-[460px] xl:h-[500px] 2xl:h-[540px]">
                         <img
                             src={images[currentImage]}
                             alt="travel banner"
-                            className={`w-full h-full min-h-[460px] xl:min-h-[500px] 2xl:min-h-[540px] object-fit transition-opacity duration-500 ${
+                            className={`w-full h-full object-cover transition-opacity duration-800 ${
                                 fade ? "opacity-100" : "opacity-0"
                             }`}
                         />

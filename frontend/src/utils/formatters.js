@@ -21,7 +21,9 @@ export const currencyFmt = (n) =>
     });
 
 export const getAirlineLogo = (code) =>
-    code ? `https://pics.avs.io/60/60/${code}.png` : "";
+    code
+        ? `${import.meta.env.VITE_BACKEND_BASE_URL || ""}/static/logos/${code.toUpperCase()}.gif`
+        : "";
 
 export const AIRCRAFT_LAYOUTS = {
     A320: ["A", "B", "C", "", "D", "E", "F"],
