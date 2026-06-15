@@ -2,7 +2,7 @@ import React, { useMemo, useState, useEffect } from "react";
 import { Plane } from "lucide-react";
 import { motion } from "framer-motion";
 import useFlightStore from "../../store/useFlightStore";
-
+import AirlineLogo from "../common/AirlineLogo";
 /* ---------- HELPERS ---------- */
 const formatTime = (dt) =>
     new Date(dt).toLocaleTimeString("en-IN", {
@@ -144,11 +144,7 @@ export default function FlightPriceCard({ flight, onViewFares = () => {} }) {
             <div className="flex flex-col md:flex-row items-center justify-between px-4 py-4 gap-4">
                 {/* AIRLINE */}
                 <div className="flex items-center gap-3 min-w-[220px]">
-                    <img
-                        src={`${import.meta.env.VITE_BACKEND_BASE_URL}/static/logos/${airlineCode}.gif`}
-                        alt={airlineName}
-                        className="w-10 h-10 object-contain"
-                    />
+                    <AirlineLogo code={airlineCode} alt={airlineName} />
                     <div>
                         <p className="text-sm font-semibold">{airlineName}</p>
                         <p className="text-xs text-gray-500">{flightNumbers}</p>
@@ -267,10 +263,9 @@ export default function FlightPriceCard({ flight, onViewFares = () => {} }) {
                                 return (
                                     <div key={idx}>
                                         <div className="bg-white border border-gray-100 rounded-xl p-3 flex gap-4">
-                                            <img
-                                                src={`${import.meta.env.VITE_BACKEND_BASE_URL}/static/logos/${airlineCode}.gif`}
+                                            <AirlineLogo
+                                                code={airlineCode}
                                                 alt={airlineName}
-                                                className="w-10 h-10 object-contain"
                                             />
                                             <div className="min-w-[160px]">
                                                 <p className="font-semibold">

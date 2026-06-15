@@ -126,6 +126,8 @@ const Footer = () => {
                                     src={img}
                                     alt="payment"
                                     className="h-7 sm:h-8 md:h-9 lg:h-8 w-auto object-contain"
+                                    loading="lazy"
+                                    decoding="async"
                                 />
                             </div>
                         ))}
@@ -179,11 +181,15 @@ const Footer = () => {
                         src={pci}
                         alt="PCI DSS Compliant"
                         className="h-14 sm:h-16 md:h-18 lg:h-20 object-contain"
+                        loading="lazy"
+                        decoding="async"
                     />
                     <img
                         src={secure}
                         alt="100% Secure"
                         className="h-12 sm:h-14 md:h-16 lg:h-18 object-contain"
+                        loading="lazy"
+                        decoding="async"
                     />
                 </div>
             </div>

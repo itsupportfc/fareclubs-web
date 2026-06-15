@@ -31,6 +31,19 @@
 
         <!-- Theme color (mobile browser address bar) -->
         <meta name="theme-color" content="#FF2E57" />
+        <!-- Google tag (gtag.js) -->
+        <script
+            async
+            src="https://www.googletagmanager.com/gtag/js?id=G-QW1RTE1RY4"
+        ></script>
+        <script>
+            window.dataLayer = window.dataLayer || [];
+            window.gtag = function gtag() {
+                window.dataLayer.push(arguments);
+            };
+            window.gtag("js", new Date());
+            window.gtag("config", "G-QW1RTE1RY4", { send_page_view: false });
+        </script>
     </head>
     <body>
         <div id="root"></div>

@@ -4,9 +4,8 @@ import { toast } from "sonner";
 import useFlightStore from "../../store/useFlightStore";
 import AirportAutocomplete from "../AirportAutocomplete";
 import { useShallow } from "zustand/react/shallow";
-import serviceFeeImage from "../../assets/servicefee.png";
-import fatakPayImage from "../../assets/fatakpay.jpeg";
-
+import serviceFeeImage from "../../assets/servicefee.avif";
+import fatakPayImage from "../../assets/fatakpay.avif";
 const images = [serviceFeeImage, fatakPayImage];
 
 function SearchPanel() {
@@ -175,16 +174,19 @@ function SearchPanel() {
                             </div>
 
                             {/* Airports */}
+
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <AirportAutocomplete
                                     label="From"
                                     value={origin}
                                     onChange={setOrigin}
+                                    inputClass="w-full h-12 rounded-lg border border-gray-200 bg-white text-black px-4 text-sm outline-none transition-all duration-200 placeholder:text-gray-400 hover:border-gray-300 focus:border-[#ff214c] focus:ring-2 focus:ring-[#ff214c]/10"
                                 />
                                 <AirportAutocomplete
                                     label="To"
                                     value={destination}
                                     onChange={setDestination}
+                                    inputClass="w-full h-12 rounded-lg border border-gray-200 bg-white text-black px-4 text-sm outline-none transition-all duration-200 placeholder:text-gray-400 hover:border-gray-300 focus:border-[#ff214c] focus:ring-2 focus:ring-[#ff214c]/10"
                                 />
                             </div>
 
@@ -360,6 +362,10 @@ function SearchPanel() {
                             className={`w-full h-full object-cover transition-opacity duration-800 ${
                                 fade ? "opacity-100" : "opacity-0"
                             }`}
+                            fetchPriority={currentImage === 0 ? "high" : "auto"}
+                            decoding="async"
+                            width={720}
+                            height={540}
                         />
                     </div>
                 </div>

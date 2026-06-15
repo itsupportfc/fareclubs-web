@@ -86,13 +86,17 @@ const Navbar = () => {
                     </div>
 
                     {/* Logo */}
-                    <div className="flex items-center">
+                    <Link
+                        to="/"
+                        aria-label="Go to flight search"
+                        className="flex items-center"
+                    >
                         <img
                             src={Farelogo}
                             alt="Fareclubs Logo"
                             className="h-10 w-auto object-contain"
                         />
-                    </div>
+                    </Link>
 
                     {/* Navigation Links (Hidden on Mobile) */}
                     <ul className="hidden sm:flex space-x-3 ml-4">

@@ -8,7 +8,7 @@ import ReturnFareModal from "../components/search/ReturnFareModal";
 import FlightSearchLoader from "../components/common/FlightSearchLoader";
 import { useTripConfig } from "../hooks/useTripConfig";
 import { filterFlights } from "../utils/flightFilters";
-import { getAirlineLogo } from "../utils/formatters";
+import AirlineLogo from "../components/common/AirlineLogo";
 import { useShallow } from "zustand/react/shallow";
 
 /* ================= HELPERS ================= */
@@ -253,7 +253,8 @@ export default function ReturnResultsPage() {
                                         key={f.groupId}
                                         flight={f}
                                         isSelected={
-                                            selectedOutbound?.groupId === f.groupId
+                                            selectedOutbound?.groupId ===
+                                            f.groupId
                                         }
                                         onSelect={handleInternationalSelect}
                                         onShowDetails={setDetailsFlight}
@@ -405,13 +406,9 @@ function FlightCard({ flight, isSelected, onSelect, onShowDetails }) {
         >
             <div className="flex justify-between items-center">
                 <div className="flex gap-4">
-                    <img
-                        src={getAirlineLogo(first.carrier.code)}
-                        className="w-10 h-10 object-contain"
+                    <AirlineLogo
+                        code={first.carrier.code}
                         alt={first.carrier.name}
-                        onError={(e) => {
-                            e.currentTarget.src = `${import.meta.env.VITE_BACKEND_BASE_URL || ""}/static/logos/nologo.gif`;
-                        }}
                     />
                     <div>
                         <div className="font-semibold">
@@ -457,14 +454,7 @@ function FooterFlight({ title, flight, legs: legsOverride, onShowDetails }) {
 
     return (
         <div className="flex items-center gap-4">
-            <img
-                src={getAirlineLogo(first.carrier.code)}
-                className="w-10 h-10 object-contain"
-                alt={first.carrier.name}
-                onError={(e) => {
-                    e.currentTarget.src = `${import.meta.env.VITE_BACKEND_BASE_URL || ""}/static/logos/nologo.gif`;
-                }}
-            />
+            <AirlineLogo code={first.carrier.code} alt={first.carrier.name} />
             <div>
                 <div className="text-sm text-gray-300">
                     {title} · {first.carrier.name}
@@ -680,13 +670,12 @@ function InternationalFlightCard({
         >
             <div className="grid grid-cols-2 gap-4">
                 <div className="flex gap-3">
-                    <img
-                        src={getAirlineLogo(outFirst.carrier.code)}
-                        className="w-8 h-8 mt-1 object-contain"
+                    <AirlineLogo
+                        code={outFirst.carrier.code}
                         alt={outFirst.carrier.name}
-                        onError={(e) => {
-                            e.currentTarget.src = `${import.meta.env.VITE_BACKEND_BASE_URL || ""}/static/logos/nologo.gif`;
-                        }}
+                        className="w-8 h-8 mt-1 object-contain"
+                        width={32}
+                        height={32}
                     />
                     <div>
                         <div className="text-xs font-semibold text-gray-400 uppercase mb-1">
@@ -706,13 +695,12 @@ function InternationalFlightCard({
                     </div>
                 </div>
                 <div className="flex gap-3">
-                    <img
-                        src={getAirlineLogo(inFirst.carrier.code)}
-                        className="w-8 h-8 mt-1 object-contain"
+                    <AirlineLogo
+                        code={inFirst.carrier.code}
                         alt={inFirst.carrier.name}
-                        onError={(e) => {
-                            e.currentTarget.src = `${import.meta.env.VITE_BACKEND_BASE_URL || ""}/static/logos/nologo.gif`;
-                        }}
+                        className="w-8 h-8 mt-1 object-contain"
+                        width={32}
+                        height={32}
                     />
                     <div>
                         <div className="text-xs font-semibold text-gray-400 uppercase mb-1">
