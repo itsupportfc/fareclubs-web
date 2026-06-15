@@ -1,6 +1,6 @@
 import React, { lazy, Suspense } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-
+import GoogleAnalytics from "../components/common/GoogleAnalytics";
 // Each page becomes its own chunk, loaded only when the route is first visited
 // vite generates files like BookingPage.[hash].js that the browser downloads on demand
 
@@ -46,6 +46,7 @@ function NotFound() {
 export default function AppRouter() {
     return (
         <BrowserRouter>
+            <GoogleAnalytics />
             <Suspense fallback={<PageLoader />}>
                 <Routes>
                     <Route path="/" element={<Dashboard />} />

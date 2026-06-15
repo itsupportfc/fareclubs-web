@@ -5,7 +5,7 @@ import { motion } from "framer-motion";
 import { getFareQuoteAPI } from "../api/flight";
 import { toast } from "sonner";
 import FareQuoteOverlay from "../common/FareQuoteOverlay";
-
+import AirlineLogo from "../common/AirlineLogo";
 export default function FareModal({
     flight,
     passengers = { adults: 1, children: 0, infants: 0 },
@@ -156,16 +156,14 @@ export default function FareModal({
                     </div>
 
                     <div className="flex items-center gap-2">
-                        {firstSegment?.carrier?.code && (
-                            <img
-                                src={`${import.meta.env.VITE_BACKEND_BASE_URL}/static/logos/${firstSegment.carrier.code}.gif`}
-                                alt={firstSegment?.carrier?.name}
-                                className="w-6 h-6 object-contain"
-                                onError={(e) =>
-                                    (e.target.style.display = "none")
-                                }
-                            />
-                        )}
+                        <AirlineLogo
+                            code={firstSegment?.carrier?.code}
+                            alt={firstSegment?.carrier?.name}
+                            className="w-6 h-6 object-contain"
+                            width={24}
+                            height={24}
+                            loading="eager"
+                        />
                         <span>{firstSegment?.carrier?.name}</span>
                     </div>
 

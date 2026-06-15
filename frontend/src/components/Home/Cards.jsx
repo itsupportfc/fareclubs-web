@@ -1,14 +1,14 @@
 import React from "react";
-import lensImage from "../../assets/lens.jpg";
+import lensImage from "../../assets/lens.avif";
 import tickImage from "../../assets/tick.avif";
 import secureLogoImage from "../../assets/securelogo.png";
 import supportImage from "../../assets/24-7.jpg";
-import cardsImage from "../../assets/cards.jpeg";
+import cardsImage from "../../assets/cards.avif";
 import airplaneImage from "../../assets/airplane.avif";
 import familyTravelImage from "../../assets/familytravel.webp";
 import travelPicImage from "../../assets/travelpic.avif";
-import scenaryImage from "../../assets/scenary.jpg";
-import vanImage from "../../assets/van.jpg";
+import scenaryImage from "../../assets/scenary.avif";
+import vanImage from "../../assets/van.avif";
 
 const promotionalImages = [cardsImage, airplaneImage, familyTravelImage];
 const holidayImages = [travelPicImage, scenaryImage, vanImage];
@@ -71,6 +71,10 @@ export default function Cards() {
                                         src={src}
                                         className="w-full h-60 object-cover"
                                         alt="Flight Destination"
+                                        loading="lazy"
+                                        decoding="async"
+                                        width={384}
+                                        height={240}
                                     />
                                 </figure>
                             </div>
@@ -93,6 +97,10 @@ export default function Cards() {
                                         src={src}
                                         className="w-full h-60 object-cover"
                                         alt="Flight Destination"
+                                        loading="lazy"
+                                        decoding="async"
+                                        width={384}
+                                        height={240}
                                     />
                                 </figure>
                             </div>
@@ -120,6 +128,10 @@ export default function Cards() {
                                     src={card.image}
                                     alt={card.title}
                                     className="w-full h-full object-contain"
+                                    loading="lazy"
+                                    decoding="async"
+                                    width={240}
+                                    height={144}
                                 />
                             </div>
 
